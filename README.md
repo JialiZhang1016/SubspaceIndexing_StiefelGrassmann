@@ -2,4 +2,4 @@
 
 Subspace indexing on Stiefel and Grassman manifolds
 
-a project of Wenqing Hu, Tiefeng Jiang and Li Zhu
+a project by Wenqing Hu, Tiefeng Jiang and Li Zhu
