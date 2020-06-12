@@ -5,6 +5,7 @@
 %author: Wenqing Hu (Missouri S&T)
 
 clearvars;
+
 A = [1 0; 0 1; 0 0];
 
 omega = [1; 2; 3];
@@ -15,26 +16,14 @@ Seq(:, :, 1)=[1 0; 0 0; 0 1];
 Seq(:, :, 2)=[0 1; 1 0; 0 0];
 Seq(:, :, 3)=[0 1; 0 0; 1 0];
 
-[f, gradf] = gradientStiefel(A, omega, Seq);
-disp(f);
-disp(gradf);
-H = [1 0; 0 1; 0 0];
-ifStiefel = CheckOnStiefel(A, 0.01);
-ifTangentStiefel = CheckTangentStiefel(A, H, 0.01);
-disp(A);
-disp(H);
-fprintf("%d %d\n", ifStiefel, ifTangentStiefel);
-[M, N, Q]=ExpStiefel(A, H);
-disp(A*M+Q*N);
-
-iteration=100;
-lr=0.01;
+iteration=1000;
+lr=0.001;
 
 [fseq, gradfnormseq, minf] = GD_Stiefel(A, omega, Seq, iteration, lr);
 
 disp(minf);
-ifStiefel = CheckOnStiefel(minf, 0.01);
-fprintf("%d\n", ifStiefel);
+[ifStiefel, distance] = CheckOnStiefel(minf, 1);
+fprintf("if still on Stiefel= %d, distance to Stiefel= %f\n", ifStiefel, distance);
 
 plot(fseq, '-.', 'LineWidth', 1, 'MarkerSize', 5, 'MarkerIndices', 1:2:iteration);
 hold on;
@@ -43,6 +32,8 @@ legend('value sequence', 'gradient norm sequence');
 xlabel('iteration');
 ylabel('Objective Value');
 hold off;
+
+
 
 %gradient descent on Stiefel Manifolds
 %Given objective function f_F(A)=\sum_{k=1}^m \omega_k \|A-A_k\|_F^2 where A, A_k\in St(p, n)
@@ -64,7 +55,7 @@ end
 
 %test if the given matrix Y is on the Stiefel manifold St(p, n)
 %Y is the matrix to be tested, threshold is a threshold value, if \|Y^TY-I_p\|_F < threshold then return true
-function [ifStiefel] = CheckOnStiefel(Y, threshold)
+function [ifStiefel, distance] = CheckOnStiefel(Y, threshold)
     n = size(Y, 1);
     p = size(Y, 2);
     Mtx = Y'*Y - eye(p);
@@ -100,7 +91,7 @@ end
 
 %Exponential Map on Stiefel manifold St(p, n)
 %Y is the matrix on St(p, n) and H is the tangent vector
-%returns M, N and exp_Y(H)=YM+QN
+%returns M, N, Q and exp_Y(H)=YM+QN
 function [M, N, Q] = ExpStiefel(Y, H)
     n = size(Y, 1);
     p = size(Y, 2);
