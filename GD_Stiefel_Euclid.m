@@ -6,6 +6,7 @@
 
 clearvars;
 
+%set the point A and A_1,...,A_m and the weight sequence
 A = [1 0 0; 0 0 1; 0 1 0; 0 0 0];
 
 omega = [1; 1; 1];
@@ -16,6 +17,7 @@ Seq(:, :, 1)=[1 0 0; 0 0 0; 0 1 0; 0 0 1];
 Seq(:, :, 2)=[0 1 0; 1 0 0; 0 0 0; 0 0 1];
 Seq(:, :, 3)=[0 1 0; 0 0 0; 1 0 0; 0 0 1];
 
+%run the GD on Stiefel St(p, n)
 iteration=10000;
 lr=0.001;
 lrdecayrate=0.5;
@@ -24,11 +26,16 @@ checkonStiefelthreshold=0.00001;
 
 [fseq, gradfnormseq, distanceseq, minf] = GD_Stiefel(A, omega, Seq, iteration, lr, lrdecayrate, gradnormthreshold, checkonStiefelthreshold);
 
+
+%output the center of mass and check if it is still on Stiefel manifold
 fprintf("the center is given by the following matrix of size %d times %d\n", n, p);
 disp(minf);
 [ifStiefel, distance] = CheckOnStiefel(minf, 1);
 fprintf("if still on Stiefel= %d, distance to Stiefel= %f\n", ifStiefel, distance);
 
+
+
+%plot the figures, objective value, gradient norm and distance to St(p, n)
 figure;
 plot(fseq, '-.', 'LineWidth', 1, 'MarkerSize', 5, 'MarkerIndices', 1:2:iteration);
 hold on;
@@ -51,24 +58,33 @@ function [fseq, gradfnormseq, distanceseq, minf] = GD_Stiefel(Y, omega, Seq, ite
     distanceseq = zeros(iteration, 1);
     A = Y;
     for i = 1:iteration
+        %record the previous step
         A_previous = A;
+        %calculate the function value and gradient on Stiefel
         [f, gradf] = gradientStiefel(A, omega, Seq);
+        %record the function value and gradient norm
         fseq(i) = f;
         gradfnormseq(i) = norm(gradf, 'fro');
+        %gradient descent on Stiefel, obtain the new step A
         H = lr * (-1) * gradf;
         [M, N, Q] = ExpStiefel(A, H);
         A = A * M + Q * N;        
+        %check if this A is still on Stiefel manifold
         [ifStiefel, distanceseq(i)] = CheckOnStiefel(A, checkonStiefelthreshold);
+        %if not, pull it back to Stiefel manifold using the projection and anothe exponential map
         if ~ifStiefel
             Z = A - A_previous;
             prj_tg = projection_tangent(A_previous, Z);
             [M, N, Q] = ExpStiefel(A_previous, prj_tg);
             A = A_previous * M + Q * N;
         end
+        %print the iteration value and gradient norm
         fprintf("iteration %d, value= %f, gradnorm= %f\n", i, f, norm(gradf, 'fro'));
     end
+    %obtain the center of mass
     minf = A;
 end
+
 
 %test if the given matrix Y is on the Stiefel manifold St(p, n)
 %Y is the matrix to be tested, threshold is a threshold value, if \|Y^TY-I_p\|_F < threshold then return true
@@ -139,6 +155,7 @@ function [f, gradf] = gradientStiefel(Y, omega, Seq)
         gradf = gradf + 2*omega(i)*((Y-Seq(:,:,i))-Y*(Y-Seq(:,:,i))'*Y);
     end
 end
+
 
 %calculate the projection onto tangent space of Stiefel manifold St(p, n)
 %\Pi_{T, Y}(Z) projects matrix Z of size n by p onto the tangent space of St(p, n) at point Y\in St(p, n)
