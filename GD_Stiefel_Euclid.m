@@ -129,7 +129,7 @@ end
 
 %Exponential Map on Stiefel manifold St(p, n)
 %Y is the matrix on St(p, n) and H is the tangent vector
-%returns M, N, Q and exp_Y(H)=YM+QN
+%returns M, N, Q and based on them one can calculate exp_Y(H)=YM+QN
 function [M, N, Q] = ExpStiefel(Y, H)
     n = size(Y, 1);
     p = size(Y, 2);
@@ -163,13 +163,11 @@ end
 
 
 %calculate the projection onto tangent space of Stiefel manifold St(p, n)
-%\Pi_{T, Y}(Z) projects matrix Z of size n by p onto the tangent space of St(p, n) at point Y\in St(p, n)
-%returns the tangent vector on T_Y(St(p, n))
+%Pi_{T, Y}(Z) projects matrix Z of size n by p onto the tangent space of St(p, n) at point Y\in St(p, n)
+%returns the tangent vector prj_tg on T_Y(St(p, n))
 function [prj_tg] = projection_tangent(Y, Z)
     n = size(Y, 1);
     p = size(Y, 2);
     skew = (Y' * Z - Z' * Y)/2;
     prj_tg = Y * skew + (eye(n) - Y * Y') * Z;
 end
-
-
