@@ -6,23 +6,23 @@
 
 clearvars;
 
-%set the point A and A_1,...,A_m and the weight sequence
-A = [1 0 0; 0 0 1; 0 1 0; 0 0 0];
+%set the initial point A on St(p, n) and A_1,...,A_m and the weight sequence
+A = [1 0 0 0; 0 0 1 0; 0 1 0 0; 0 0 0 0; 0 0 0 1];
 
 omega = [1; 1; 1];
 n = size(A, 1);
 p = size(A, 2);
 Seq = zeros(n, p, 3);
-Seq(:, :, 1)=[1 0 0; 0 0 0; 0 1 0; 0 0 1];
-Seq(:, :, 2)=[0 1 0; 1 0 0; 0 0 0; 0 0 1];
-Seq(:, :, 3)=[0 1 0; 0 0 0; 1 0 0; 0 0 1];
+Seq(:, :, 1) = [1 0 0 0; 0 0 0 0; 0 1 0 0; 0 0 1 0; 0 0 0 1];
+Seq(:, :, 2) = [0 1 0 0; 1 0 0 0; 0 0 0 0; 0 0 1 0; 0 0 0 1];
+Seq(:, :, 3) = [0 1 0 0; 0 0 0 0; 1 0 0 0; 0 0 1 0; 0 0 0 1];
 
 %run the GD on Stiefel St(p, n)
-iteration=10000;
-lr=0.001;
-lrdecayrate=0.5;
-gradnormthreshold=0.1;
-checkonStiefelthreshold=0.00001;
+iteration = 10000;
+lr = 0.001;
+lrdecayrate = 1;
+gradnormthreshold = 1e-4;
+checkonStiefelthreshold = 1e-10;
 
 [fseq, gradfnormseq, distanceseq, minf] = GD_Stiefel(A, omega, Seq, iteration, lr, lrdecayrate, gradnormthreshold, checkonStiefelthreshold);
 
@@ -35,7 +35,7 @@ fprintf("if still on Stiefel= %d, distance to Stiefel= %f\n", ifStiefel, distanc
 
 
 
-%plot the figures, objective value, gradient norm and distance to St(p, n)
+%plot the objective value, gradient norm and distance to St(p, n)
 figure;
 plot(fseq, '-.', 'LineWidth', 1, 'MarkerSize', 5, 'MarkerIndices', 1:2:iteration);
 hold on;
@@ -65,13 +65,18 @@ function [fseq, gradfnormseq, distanceseq, minf] = GD_Stiefel(Y, omega, Seq, ite
         %record the function value and gradient norm
         fseq(i) = f;
         gradfnormseq(i) = norm(gradf, 'fro');
+        %if the gradient norm is small than the threshold value, then decay the stepsize exponentially
+        %we are able to tune the decay rate, and so far due to convexity it seems not decay is the best option
+        if norm(gradf, 'fro') < gradnormthreshold
+            lr = lr * lrdecayrate;
+        end
         %gradient descent on Stiefel, obtain the new step A
         H = lr * (-1) * gradf;
         [M, N, Q] = ExpStiefel(A, H);
         A = A * M + Q * N;        
         %check if this A is still on Stiefel manifold
         [ifStiefel, distanceseq(i)] = CheckOnStiefel(A, checkonStiefelthreshold);
-        %if not, pull it back to Stiefel manifold using the projection and anothe exponential map
+        %if not, pull it back to Stiefel manifold using the projection and another exponential map
         if ~ifStiefel
             Z = A - A_previous;
             prj_tg = projection_tangent(A_previous, Z);
