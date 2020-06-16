@@ -30,11 +30,14 @@ offs = offs(1: 200*2^10);
 %form the sift_sample dataset
 sift_sample = double(sifts(offs, :));
 
+%find the total mean of sift_sample, set as the ceter point for calculating distances
+mean_sift_0 = mean(sift_sample);
+
 %do an initial PCA on sift_samples dataset
 [A0, s0, lat0] = pca(sift_sample);
 
 %plot the whole PCA spectrum for sift_samples
-doplotPCAspectrum = 1;
+doplotPCAspectrum = 0;
 if doplotPCAspectrum
     figure;
     hold on; grid on;
@@ -52,21 +55,27 @@ x0 = sift_sample * A0(:, 1:kd_siftStiefel);
 [indx, leafs]=buildVisualWordList(x0, ht);
 
 
+%the weight sequence
+omega = zeros(length(leafs), 1);
+
 % build PCA Model for each leaf
 doBuildSiftModel = 1;
 % input: sift, indx, leafs
 if doBuildSiftModel
     for k=1:length(leafs)
+        %form the sift subsample for the k-th cluster
         sift_k = sift_sample(leafs{k}, :); 
-        [n_sift_k, kd] = size(sift_k);
-        offs = randperm(n_sift_k);
+        %find the mean of sift_k, set as the ceter point for the k-th cluster
+        mean_sift_k = mean(sift_k);
+        %calculate the distance d_k = dist(mean_sift_0, mean_sift_k)
+        d_k = norm(mean_sift_0 - mean_sift_k);
+        %let omega_k = exp(-d_k) (too close to 0), so need to modify to exp(-0.01*d_k)
+        omega(k) = exp(-0.01 * d_k);
+        %do PCA analysis of sift_k and form the k-th frame A_k
         [A{k}, s, lat] = pca(sift_k);
         Seq(:, :, k) = A{k}(:, 1:kd_siftStiefel); 
     end
 end    
 
-omega = ones(length(leafs), 1);
-
-%disp(size(Seq(:, :, 1)));
 
 end

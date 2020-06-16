@@ -32,7 +32,7 @@ p = size(A, 2);
 
 %run the GD on Stiefel St(p, n)
 iteration = 1000;
-lr = 0.001;
+lr = 0.01;
 lrdecayrate = 1;
 gradnormthreshold = 1e-4;
 checkonStiefelthreshold = 1e-10;
@@ -71,16 +71,39 @@ legend('distance to Stiefel');
 
 
 %test the PCA spectrum of SIFT projection onto the eigenspace spanned by the center on St(p, n) that we found
+%do an initial PCA on sift_samples dataset
+[A0, s0, lat0] = pca(sift_sample);
+
+figure;
+plot(lat0, '-.', 'LineWidth', 1, 'MarkerSize', 5, 'MarkerIndices', 1:2:n);
+
 %project sift_sample onto the center frame on St(p, n)
 x_mean = sift_sample * minf;
 %analyze the PCA spectrum of the low-dimensional projection
 [A_mean, s_mean, lat_mean] = pca(x_mean);
 %plot the PCA spectrum for the projection of sift_sample onto x_mean
-figure;
+%figure;
 hold on; 
 grid on;
-stem(lat_mean, '.'); 
-title('sift projected onto mean eigenspaces pca eigenvalues');
+%stem(lat_mean, '.'); 
+plot(lat_mean, '--','Color', [0.6350 0.0780 0.1840],  'LineWidth', 1, 'MarkerSize', 5, 'MarkerIndices', 1:2:kd_siftStiefel);
+%title('sift projected onto mean eigenspaces pca eigenvalues');
+
+%to compare, randomly pick one element in Seq and do projection and PCA spectrum
+init_label = randi(m);
+x_bm = sift_sample * Seq(:, :, init_label);
+%analyze the PCA spectrum of the low-dimensional projection
+[A_bm, s_bm, lat_bm] = pca(x_bm);
+%plot the PCA spectrum for the projection of sift_sample onto x_mean
+%figure;
+%hold on; 
+%grid on;
+plot(lat_bm, '-*', 'Color', [0.9290 0.6940 0.1250], 'LineWidth', 1, 'MarkerSize', 5, 'MarkerIndices', 1:2:kd_siftStiefel);
+%stem(lat_bm, '.'); 
+title('sift projected onto frames pca eigenvalues');
+%title('sift projected onto randomly selected cluster frames pca eigenvalues');
+legend('sift original', 'total center', 'random center');
+hold off;
 
 %---------------------------------------------------- END RUN FILE PART ---------------------------------------------
 
