@@ -6,16 +6,15 @@
 
 clearvars;
 
-%set the initial point A on St(p, n) and A_1,...,A_m and the weight sequence
-A = [1 0 0 0; 0 0 1 0; 0 1 0 0; 0 0 0 0; 0 0 0 1];
+%set the A_1,...,A_m on St(p, n) and the weight sequence 
+%the initial point A on St(p, n) is chosen as one of the A_k's
 
-omega = [1; 1; 1];
+[Seq, omega] = SIFT_PCA;
+
+A = Seq(:, :, 1);
+
 n = size(A, 1);
 p = size(A, 2);
-Seq = zeros(n, p, 3);
-Seq(:, :, 1) = [1 0 0 0; 0 0 0 0; 0 1 0 0; 0 0 1 0; 0 0 0 1];
-Seq(:, :, 2) = [0 1 0 0; 1 0 0 0; 0 0 0 0; 0 0 1 0; 0 0 0 1];
-Seq(:, :, 3) = [0 1 0 0; 0 0 0 0; 1 0 0 0; 0 0 1 0; 0 0 0 1];
 
 %run the GD on Stiefel St(p, n)
 iteration = 10000;
