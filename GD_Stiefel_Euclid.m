@@ -4,20 +4,34 @@
 
 %author: Wenqing Hu (Missouri S&T)
 
+%---------------------------------------------------- START RUN FILE PART ---------------------------------------------
+%Generate from SIFT data the local frames A_1, ..., A_{256}
+%Find their center of mass A in Euclidean norm under weight w_k = exp(-d_k) where d_k is the SIFT distance to each cluster's centroid  
+%Test the PCA energy spectrum for SIFT projection on A
+
 clearvars;
 
 %set the A_1,...,A_m on St(p, n) and the weight sequence 
 %the initial point A on St(p, n) is chosen as one of the A_k's
 
-[Seq, omega] = SIFT_PCA;
+%the PCA embedding dimension = kd_siftStiefel
+kd_siftStiefel = 16;
+%select the sift_sample in SIFT dataset that we will be working on
+%generate A_1,...,A_m and omega_1,...,omega_m
+[Seq, omega, sift_sample] = SIFT_PCA(kd_siftStiefel);
 
-A = Seq(:, :, 1);
+%choose an initial frame to start the GD, randomly selected from A_1,...,A_m
+rng(1);
+m = length(Seq);
+init_label = randi(m);
+A = Seq(:, :, init_label);
 
+%all these frames are on St(n, p), actually n=128 and p=kd_siftStiefel
 n = size(A, 1);
 p = size(A, 2);
 
 %run the GD on Stiefel St(p, n)
-iteration = 10000;
+iteration = 1000;
 lr = 0.001;
 lrdecayrate = 1;
 gradnormthreshold = 1e-4;
@@ -27,24 +41,49 @@ checkonStiefelthreshold = 1e-10;
 
 
 %output the center of mass and check if it is still on Stiefel manifold
-fprintf("the center is given by the following matrix of size %d times %d\n", n, p);
 disp(minf);
+fprintf("the center is given by the above matrix of size %d times %d\n", n, p);
 [ifStiefel, distance] = CheckOnStiefel(minf, 1);
 fprintf("if still on Stiefel= %d, distance to Stiefel= %f\n", ifStiefel, distance);
-
 
 
 %plot the objective value, gradient norm and distance to St(p, n)
 figure;
 plot(fseq, '-.', 'LineWidth', 1, 'MarkerSize', 5, 'MarkerIndices', 1:2:iteration);
-hold on;
-plot(gradfnormseq, '-*', 'Color', [0.9290 0.6940 0.1250], 'LineWidth', 1, 'MarkerSize', 5, 'MarkerIndices', 1:2:iteration);
-plot(distanceseq, '--','Color', [0.6350 0.0780 0.1840],  'LineWidth', 1, 'MarkerSize', 5, 'MarkerIndices', 1:2:iteration);
-legend('objective value', 'gradient norm', 'distance to Stiefel');
 xlabel('iteration');
 ylabel('Objective Value');
-hold off;
+legend('objective value');
 title('Gradient Descent on Stiefel Manifold');
+
+figure;
+plot(gradfnormseq, '-*', 'Color', [0.9290 0.6940 0.1250], 'LineWidth', 1, 'MarkerSize', 5, 'MarkerIndices', 1:2:iteration);
+xlabel('iteration');
+ylabel('Gradient Norm');
+legend('gradient norm');
+title('Gradient Descent on Stiefel Manifold');
+
+figure;
+plot(distanceseq, '--','Color', [0.6350 0.0780 0.1840],  'LineWidth', 1, 'MarkerSize', 5, 'MarkerIndices', 1:2:iteration);
+xlabel('iteration');
+ylabel('Distance to Stiefel');
+title('Gradient Descent on Stiefel Manifold');
+legend('distance to Stiefel');
+
+
+%test the PCA spectrum of SIFT projection onto the eigenspace spanned by the center on St(p, n) that we found
+%project sift_sample onto the center frame on St(p, n)
+x_mean = sift_sample * minf;
+%analyze the PCA spectrum of the low-dimensional projection
+[A_mean, s_mean, lat_mean] = pca(x_mean);
+%plot the PCA spectrum for the projection of sift_sample onto x_mean
+figure;
+hold on; 
+grid on;
+stem(lat_mean, '.'); 
+title('sift projected onto mean eigenspaces pca eigenvalues');
+
+%---------------------------------------------------- END RUN FILE PART ---------------------------------------------
+
 
 
 

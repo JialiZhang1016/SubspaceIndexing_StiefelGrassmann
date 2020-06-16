@@ -16,8 +16,6 @@
 
 function [indx, leafs, mbrs]=buildVisualWordList(x, ht)
 
-clearvars;
-
 dbg =0;
 if dbg
     x = randn(1024*4, 2); 

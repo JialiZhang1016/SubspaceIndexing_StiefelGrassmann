@@ -6,9 +6,8 @@
 
 %author: Wenqing Hu (Missouri S&T)
 
-function [Seq, omega] = SIFT_PCA()
-
-clearvars;
+function [Seq, omega, sift_sample] = SIFT_PCA(kd_siftStiefel)
+%the PCA embedding dimension = kd_siftStiefel
 
 %load the sift dataset
 %structure: 
@@ -35,21 +34,23 @@ sift_sample = double(sifts(offs, :));
 [A0, s0, lat0] = pca(sift_sample);
 
 %plot the whole PCA spectrum for sift_samples
-figure(1);
-hold on; grid on;
-stem(lat0, '.'); 
-title('sift pca eigenvalues');
+doplotPCAspectrum = 1;
+if doplotPCAspectrum
+    figure;
+    hold on; grid on;
+    stem(lat0, '.'); 
+    title('sift pca eigenvalues');
+end
 
 %set the kd-partition tree height = ht
 ht = 8; 
-%set the PCA embedding dimension = kd 
-kd = 12; 
 
 %bulid a 12-dimensional embedding of sift_samples in x0
-x0 = sift_sample * A0(:, 1:kd);
+x0 = sift_sample * A0(:, 1:kd_siftStiefel);
 
-%from x_0, partition into 2^ht leaf nodes, each leaf node can give samples for a local PCA
+%from x0, partition into 2^ht leaf nodes, each leaf node can give samples for a local PCA
 [indx, leafs]=buildVisualWordList(x0, ht);
+
 
 % build PCA Model for each leaf
 doBuildSiftModel = 1;
@@ -60,12 +61,12 @@ if doBuildSiftModel
         [n_sift_k, kd] = size(sift_k);
         offs = randperm(n_sift_k);
         [A{k}, s, lat] = pca(sift_k);
-        Seq(:, :, k) = A{k}(:, 1:kd); 
+        Seq(:, :, k) = A{k}(:, 1:kd_siftStiefel); 
     end
 end    
 
 omega = ones(length(leafs), 1);
 
-disp(size(Seq(:, :, 1)));
+%disp(size(Seq(:, :, 1)));
 
 end
