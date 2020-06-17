@@ -42,6 +42,8 @@ if doplotPCAspectrum
     figure;
     hold on; grid on;
     stem(lat0, '.'); 
+    xlabel('dimension');
+    ylabel('eigenvalues');
     title('sift pca eigenvalues');
 end
 
@@ -70,6 +72,8 @@ if doBuildSiftModel
         %calculate the distance d_k = dist(mean_sift_0, mean_sift_k)
         d_k = norm(mean_sift_0 - mean_sift_k);
         %let omega_k = exp(-d_k) (too close to 0), so need to modify to exp(-0.01*d_k)
+        %omega(k) = exp(-0.0001 * d_k^2);
+        %omega(k) = 1/d_k;
         omega(k) = exp(-0.01 * d_k);
         %do PCA analysis of sift_k and form the k-th frame A_k
         [A{k}, s, lat] = pca(sift_k);

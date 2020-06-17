@@ -15,7 +15,7 @@ clearvars;
 %the initial point A on St(p, n) is chosen as one of the A_k's
 
 %the PCA embedding dimension = kd_siftStiefel
-kd_siftStiefel = 16;
+kd_siftStiefel = 12;
 %select the sift_sample in SIFT dataset that we will be working on
 %generate A_1,...,A_m and omega_1,...,omega_m
 [Seq, omega, sift_sample] = SIFT_PCA(kd_siftStiefel);
@@ -70,6 +70,7 @@ title('Gradient Descent on Stiefel Manifold');
 legend('distance to Stiefel');
 
 
+
 %test the PCA spectrum of SIFT projection onto the eigenspace spanned by the center on St(p, n) that we found
 %do an initial PCA on sift_samples dataset
 [A0, s0, lat0] = pca(sift_sample);
@@ -90,7 +91,7 @@ plot(lat_mean, '--','Color', [0.6350 0.0780 0.1840],  'LineWidth', 1, 'MarkerSiz
 %title('sift projected onto mean eigenspaces pca eigenvalues');
 
 %to compare, randomly pick one element in Seq and do projection and PCA spectrum
-init_label = randi(m);
+init_label = 1;
 x_bm = sift_sample * Seq(:, :, init_label);
 %analyze the PCA spectrum of the low-dimensional projection
 [A_bm, s_bm, lat_bm] = pca(x_bm);
@@ -104,6 +105,16 @@ title('sift projected onto frames pca eigenvalues');
 %title('sift projected onto randomly selected cluster frames pca eigenvalues');
 legend('sift original', 'total center', 'random center');
 hold off;
+
+
+figure;
+hold on; 
+grid on;
+stem(lat_mean, '.'); 
+xlabel('dimension');
+ylabel('eigenvalues');
+title('sift projected onto the center of mass Stiefel matrix pca eigenvalues');
+
 
 %---------------------------------------------------- END RUN FILE PART ---------------------------------------------
 
