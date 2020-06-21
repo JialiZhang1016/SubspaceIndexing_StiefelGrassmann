@@ -1,3 +1,7 @@
 <b>Subspace indexing on Stiefel and Grassman manifolds</b>
 
 a project by Wenqing Hu, Tiefeng Jiang and Li Zhu
+
+(1) Stiefel_Optimization.m 
+
+contains various functions for optimization calculus and differential geometry on Stiefel manifolds, such as tangent projection, exponential map, geodesics, gradient descent, etc.
