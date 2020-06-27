@@ -10,11 +10,11 @@ clear classes;
 %the PCA embedding dimension = kd_siftStiefel
 kd_siftStiefel = 16;
 %train_size = the SIFT training data size
-train_size = 200*2^10;
+train_size = 200*2^12;
 %ht = the partition tree height
-ht = 8;
+ht = 10;
 %test_size = the SIFT test data size
-test_size = 20;
+test_size = 50;
 %interpolation_number = number of frames used for interpolation between cluster PCA frames
 interpolation_number = 3;
 
@@ -54,6 +54,7 @@ error_bm = zeros(test_size, 1); %recovery errors for the nearest frame, benchmar
 error_c = zeros(test_size, 1);  %recovery errors using the Stiefel center method
 
 for test_index=1:test_size
+    fprintf("\ntest point %d -----------------------------------------------------------\n", test_index);
     x = sift_test(test_index, :);
     %Sort the cluster centers m_1, ..., m_{2^{ht}} by ascending distances to x 
     dist = zeros(2^ht, 1);
@@ -105,8 +106,15 @@ end
 
 fprintf("rate that interpolated mean projection recovery efficiency is better than nearest neighbor = %f %% \n", counter_success/test_size*100);
 
-
-
+figure;
+plot(error_c, '-.', 'LineWidth', 1, 'MarkerSize', 5, 'MarkerIndices', 1:2:test_size);
+hold on;
+plot(error_bm, '-*', 'Color', [0.9290 0.6940 0.1250], 'LineWidth', 1, 'MarkerSize', 5, 'MarkerIndices', 1:2:test_size);
+xlabel('test set sample index');
+ylabel('Recovery error');
+legend('Stiefel center recovery', 'benchmark nearest neighbor recovery');
+title('PCA Recovery Errors');
+hold off;
 
 
 function [sift_train, Seq, leafs, sift_test] = SIFT_PCA_train(kd_siftStiefel, train_size, ht, test_size)
@@ -119,12 +127,12 @@ function [sift_train, Seq, leafs, sift_test] = SIFT_PCA_train(kd_siftStiefel, tr
 
 %Input
 %   kd_siftStiefel = the PCA embedding dimension 
-%   train_size = the SIFT training data size
+%   train_size, test_size = the SIFT training/testing data set size
 %   ht = the partition tree height
 %Output
-%   sift_train = the sift training data set , size is traing_size
+%   sift_train, sift_test = the sift training/testing data set , size is traing_size/test_size
 %   leafs = leafs{k}, the cluster indexes in sift_train
-%   Seq = the Stiefel frames corresponding to each cluster
+%   Seq = the Stiefel frames corresponding to each cluster in sift_train
 
 %load the sift dataset
 %structure: 
