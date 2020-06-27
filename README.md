@@ -8,8 +8,8 @@ contains various functions for optimization calculus and differential geometry o
 
 (2) buildVisualWordList.m
 
-partition a given SIFT (Scale Invariant Feature Transform) sample data set according to a tree of given height ht
+partition a given sample data set according to a tree of given height ht into leaf nodes
 
 (3) SIFT_PCA.m
 
-do the SIFT PCA analysis
+do the SIFT (Scale Invariant Feature Transform) PCA analysis
