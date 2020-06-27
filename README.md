@@ -8,7 +8,7 @@ contains various functions for optimization calculus and differential geometry o
 
 (2) buildVisualWordList.m
 
-partition a given sample data set according to a tree of given height ht into leaf nodes
+partition a given sample data set according to a tree of given height into leaf nodes
 
 (3) SIFT_PCA.m
 
