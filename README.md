@@ -13,3 +13,7 @@ partition a given sample data set according to a tree of given height into leaf 
 (3) SIFT_PCA.m
 
 do the SIFT (Scale Invariant Feature Transform) PCA analysis
+
+(4) SIFT_PCA_Recovery.m
+
+do the SIFT PCA recovery using the Stiefel_Optimization method, compare with benchmark nearest neighbor method
