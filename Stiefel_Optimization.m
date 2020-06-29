@@ -57,7 +57,7 @@ function [minvalue, gradminfnorm, minf] = CenterMass_Stiefel_Euclid(self, Y)
     p = size(Y, 2);
     B = zeros(n, p);
     for i=1:m
-        B = B + self.omega(i) * self.Seq(i);
+        B = B + self.omega(i) * self.Seq(:, :, i);
     end
     [O1, D, O2] = svd(B);
     O = zeros(p, n-p);
