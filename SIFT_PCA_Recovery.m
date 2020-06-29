@@ -10,9 +10,9 @@ clear classes;
 %the PCA embedding dimension = kd_siftStiefel
 kd_siftStiefel = 16;
 %train_size = the SIFT training data size
-train_size = 200*2^12;
+train_size = 100*2^5;
 %ht = the partition tree height
-ht = 10;
+ht = 5;
 %test_size = the SIFT test data size
 test_size = 50;
 %interpolation_number = number of frames used for interpolation between cluster PCA frames
@@ -53,6 +53,9 @@ K = 1e-8; %the scaling coefficient for calculating the weights w = e^{-K distanc
 error_bm = zeros(test_size, 1); %recovery errors for the nearest frame, benchmark
 error_c = zeros(test_size, 1);  %recovery errors using the Stiefel center method
 
+doGD = 0; %do or do not do GD
+
+tic;
 for test_index=1:test_size
     fprintf("\ntest point %d -----------------------------------------------------------\n", test_index);
     x = sift_test(test_index, :);
@@ -92,7 +95,12 @@ for test_index=1:test_size
     %bulid the Stiefel Optimization Object
     StiefelOpt = Stiefel_Optimization(w, frames, iteration, lr, lrdecayrate, gradnormthreshold, checkonStiefelthreshold);
     %find the Euclidean center of mass A_c
-    [fseq, gradfnormseq, distanceseq, A_c] = StiefelOpt.GD_Stiefel_Euclid(A);
+    %compare the two methods, do GD or direct calculation
+    if doGD
+        [fseq, gradfnormseq, distanceseq, A_c] = StiefelOpt.GD_Stiefel_Euclid(A);
+    else
+        [minvalue, gradminfnorm, A_c] = StiefelOpt.CenterMass_Stiefel_Euclid(A);
+    end
     %obtain the projection y = A_c x and the recovery x_hatc = (A_c)^- y, calculate |x-x_hatc|
     y = x * A_c;
     x_hatc = y * pinv(A_c);
@@ -100,9 +108,13 @@ for test_index=1:test_size
     %count if the recovery by Stiefel center method is better
     if error_c(test_index) < error_bm(test_index)
         counter_success = counter_success + 1;
+        fprintf("efficient! :)\n");
+    else
+        fprintf("not efficient :(\n");
     end
+    fprintf("error for mean projection recovery = %f, error for benchmark nearest neighbor = %f\n", error_c(test_index), error_bm(test_index));
 end
-
+toc;
 
 fprintf("rate that interpolated mean projection recovery efficiency is better than nearest neighbor = %f %% \n", counter_success/test_size*100);
 
@@ -183,3 +195,5 @@ if doBuildSiftModel
 end    
 
 end
+
+

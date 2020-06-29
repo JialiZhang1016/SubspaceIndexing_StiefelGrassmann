@@ -48,6 +48,25 @@ function [f, gradf] = gradientStiefel_Euclid(self, Y)
     end
 end
 
+%directly calculate the Euclidean center of mass that is the St(p, n) minimizer of f_F(A)=\sum_{k=1}^m w_k\|A-A_k\|_F^2
+%according to Professor Tiefeng Jiang's elegant lemma based on SVD
+function [minvalue, gradminfnorm, minf] = CenterMass_Stiefel_Euclid(self, Y)
+    A = Y;
+    m = length(self.omega);
+    n = size(Y, 1);
+    p = size(Y, 2);
+    B = zeros(n, p);
+    for i=1:m
+        B = B + self.omega(i) * self.Seq(i);
+    end
+    [O1, D, O2] = svd(B);
+    O = zeros(p, n-p);
+    Mtx = [eye(p) O];
+    Mtx = Mtx';
+    minf = O1 * Mtx * O2';
+    [minvalue, gradminf] = self.gradientStiefel_Euclid(minf);
+    gradminfnorm = norm(gradminf, 'fro');
+end
 
 %gradient descent on Stiefel Manifolds
 %GD_Stiefel_Euclid can find the Euclidean Center of Mass via Gradient Descent on Stiefel Manifolds
@@ -86,7 +105,7 @@ function [fseq, gradfnormseq, distanceseq, minf] = GD_Stiefel_Euclid(self, Y)
             A = A_previous * M + Q * N;
         end
         %print the iteration value and gradient norm
-        fprintf("iteration %d, value= %f, gradnorm= %f\n", i, f, norm(gradf, 'fro'));
+        %fprintf("iteration %d, value= %f, gradnorm= %f\n", i, f, norm(gradf, 'fro'));
     end
     %obtain the center of mass
     minf = A;
