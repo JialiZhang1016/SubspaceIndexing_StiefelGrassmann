@@ -15,8 +15,8 @@ train_size = 100*2^13;
 ht = 13;
 %test_size = the SIFT test data size
 test_size = 50;
-%interpolation_number = number of frames used for interpolation between cluster PCA frames
-%interpolation_number = 2;
+
+%set the sequence of interpolation numbers and the threshold ratio for determining the interpolation number
 interpolation_number_seq = ones(test_size, 1);
 ratio_threshold = 1.001;
 
@@ -36,7 +36,7 @@ ratio_threshold = 1.001;
 kd_sift = size(sift_test, 2);
 
 m = zeros(kd_sift, 2^ht);
-%find m_1, ..., m_{2^{ht}}
+%find m_1, ..., m_{2^{ht}}, the means of the chosen clusters
 for k=1:2^ht 
     m(:, k) = mean(sift_train(leafs{k}, :), 1);
 end
@@ -44,10 +44,11 @@ end
 %For each point x in sift_test, 
 %(1) Find the nearest cluster center m_k from m_1, ..., m_{2^{ht}}
 %    Recover x from its PCA projection y = A_k x by considering x_hat = A_k^- y where A_k^- is the pseudo-inverse of A_k
-%(2) Find the nearest 3 cluster centers m_k1, m_k2, m_k3 from m_1, ..., m_{2^{ht}}
-%    Find the weights w_i = exp(-|x-m_i|^2) for i = 1, 2, 3 and calculate the Stiefel mean A^c_k from f_F(A)=\sum_{i=1}^3 w_i |A-A_ki|_F^2
+%(2) Find the nearest (interpolation_number) cluster centers m_k1, m_k2, m_k(interpolation number) from m_1, ..., m_{2^{ht}}
+%    interpolation_number is determined by |x-m_k(interpolation_number+1)| > ratio_threshold * |x-m_k1|
+%    Find the weights w_i = exp(-|x-m_i|^2) for i = 1, ..., interpolation_number and calculate the Stiefel mean A^c_k from f_F(A)=\sum_{i=1}^interpolation_number w_i |A-A_ki|_F^2
 %    Recover x from its PCA projection y^c = A^c_k x by considering x_hat^c = (A^c_k)^- y where (A^c_k)^- is the pseudo-inverse of A^c_k
-%Compare the two recover errors |x-x_hat| and |x-x_hat^c| over sift_test
+%Compare the two recover errors error_bm=|x-x_hat| and error_c=|x-x_hat^c| over sift_test
 %Geometric insights suggest that the latter error may be smaller, i.e., the recover is more efficient
 
 counter_success = 0; %counting the number of times when recover via interpolation is more efficient
@@ -67,7 +68,8 @@ for test_index=1:test_size
         dist(k) = norm(x-m(:, k));
     end
     [dist_sort, indexes] = sort(dist, 1, 'ascend');
-    %count the adapted interpolation number for current test point x
+    %count the number of St(p, n) interpolation clusters for current test point x
+    %interpolation_number = number of frames used for interpolation between cluster PCA frames
     interpolation_number = 1;
     for k=2:2^ht
         if dist_sort(k) <= ratio_threshold * dist_sort(1)
@@ -76,6 +78,8 @@ for test_index=1:test_size
             break;
         end    
     end
+    fprintf("interpolation number = %d\n", interpolation_number);
+    %record the sequence of all interpolation numbers for each test point x
     interpolation_number_seq(test_index) = interpolation_number;
     %find the Stiefel projection frames A_k1, ..., A_k{interpolation_number} for the first (interpolation_number) closest clusters to x
     frames = zeros(kd_sift, kd_siftStiefel, interpolation_number);
@@ -87,7 +91,7 @@ for test_index=1:test_size
     for i=1:interpolation_number
         w(i) = exp(-K*(dist_sort(i))^2);
     end
-    %obtain the projection y = A_k1 x and the recovery x_hat = (A_k1)^- y, calculate |x-x_hat|
+    %obtain the projection y = A_k1 x and the recovery x_hat = (A_k1)^- y, calculate error_bm=|x-x_hat|
     y = x * frames(:, :, 1);
     x_hat = y * pinv(frames(:, :, 1));
     error_bm(test_index) = norm(x-x_hat);
@@ -113,30 +117,32 @@ for test_index=1:test_size
     else
         [minvalue, gradminfnorm, A_c] = StiefelOpt.CenterMass_Stiefel_Euclid(A);
     end
-    %obtain the projection y = A_c x and the recovery x_hatc = (A_c)^- y, calculate |x-x_hatc|
+    %obtain the projection y = A_c x and the recovery x_hatc = (A_c)^- y, calculate error_c=|x-x_hatc|
     y = x * A_c;
     x_hatc = y * pinv(A_c);
     error_c(test_index) = norm(x-x_hatc);
     %count if the recovery by Stiefel center method is better
-    if error_c(test_index) < error_bm(test_index)
+    fprintf("error for mean projection recovery = %f, error for benchmark nearest neighbor = %f\n", error_c(test_index), error_bm(test_index));
+    if error_c(test_index) < error_bm(test_index) || interpolation_number == 1
         counter_success = counter_success + 1;
         fprintf("efficient! :)\n");
     else
         fprintf("not efficient :(\n");
     end
-    fprintf("error for mean projection recovery = %f, error for benchmark nearest neighbor = %f\n", error_c(test_index), error_bm(test_index));
 end
 toc;
 
+%output the recovery efficiency percentage
 fprintf("rate that interpolated mean projection recovery efficiency is better than nearest neighbor = %f %% \n", counter_success/test_size*100);
 
+%plot
 figure;
-plot(error_c, '-.', 'LineWidth', 1, 'MarkerSize', 5, 'MarkerIndices', 1:2:test_size);
+plot(error_c, '-*', 'Color', [1 0 0], 'LineWidth', 1, 'MarkerSize', 5, 'MarkerIndices', 1:2:test_size);
 hold on;
-plot(error_bm, '-*', 'Color', [0.9290 0.6940 0.1250], 'LineWidth', 1, 'MarkerSize', 5, 'MarkerIndices', 1:2:test_size);
-xlabel('test set sample index');
+plot(error_bm, '-*', 'Color', [0 0 1], 'LineWidth', 1, 'MarkerSize', 5, 'MarkerIndices', 1:2:test_size);
+xlabel('Index of test sample');
 ylabel('Recovery error');
-legend('Stiefel center recovery', 'benchmark nearest neighbor recovery');
+legend('Stiefel Euclidean center recovery', 'benchmark nearest neighbor recovery');
 title('PCA Recovery Errors');
 hold off;
 
