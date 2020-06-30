@@ -10,13 +10,15 @@ clear classes;
 %the PCA embedding dimension = kd_siftStiefel
 kd_siftStiefel = 16;
 %train_size = the SIFT training data size
-train_size = 100*2^5;
+train_size = 100*2^13;
 %ht = the partition tree height
-ht = 5;
+ht = 13;
 %test_size = the SIFT test data size
 test_size = 50;
 %interpolation_number = number of frames used for interpolation between cluster PCA frames
-interpolation_number = 3;
+%interpolation_number = 2;
+interpolation_number_seq = ones(test_size, 1);
+ratio_threshold = 1.001;
 
 %First sample a training dataset sift_train from the SIFT data set
 %Set the partition tree depth = ht
@@ -65,6 +67,16 @@ for test_index=1:test_size
         dist(k) = norm(x-m(:, k));
     end
     [dist_sort, indexes] = sort(dist, 1, 'ascend');
+    %count the adapted interpolation number for current test point x
+    interpolation_number = 1;
+    for k=2:2^ht
+        if dist_sort(k) <= ratio_threshold * dist_sort(1)
+            interpolation_number = interpolation_number + 1;
+        else
+            break;
+        end    
+    end
+    interpolation_number_seq(test_index) = interpolation_number;
     %find the Stiefel projection frames A_k1, ..., A_k{interpolation_number} for the first (interpolation_number) closest clusters to x
     frames = zeros(kd_sift, kd_siftStiefel, interpolation_number);
     for i=1:interpolation_number

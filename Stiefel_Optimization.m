@@ -105,7 +105,7 @@ function [fseq, gradfnormseq, distanceseq, minf] = GD_Stiefel_Euclid(self, Y)
             A = A_previous * M + Q * N;
         end
         %print the iteration value and gradient norm
-        %fprintf("iteration %d, value= %f, gradnorm= %f\n", i, f, norm(gradf, 'fro'));
+        fprintf("iteration %d, value= %f, gradnorm= %f\n", i, f, norm(gradf, 'fro'));
     end
     %obtain the center of mass
     minf = A;
