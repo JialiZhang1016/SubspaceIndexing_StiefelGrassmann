@@ -14,7 +14,7 @@ train_size = 100*2^13;
 %ht = the partition tree height
 ht = 13;
 %test_size = the SIFT test data size
-test_size = 50;
+test_size = 10;
 
 %set the sequence of interpolation numbers and the threshold ratio for determining the interpolation number
 interpolation_number_seq = ones(test_size, 1);
@@ -132,8 +132,9 @@ for test_index=1:test_size
 end
 toc;
 
-%output the recovery efficiency percentage
+%output the recovery efficiency percentage and related data
 fprintf("rate that interpolated mean projection recovery efficiency is better than nearest neighbor = %f %% \n", counter_success/test_size*100);
+fprintf("mean of Error-c = %f, mean of Error-bm = %f \n", mean(error_c), mean(error_bm));
 
 %plot
 figure;
@@ -145,6 +146,31 @@ ylabel('Recovery error');
 legend('Stiefel Euclidean center recovery', 'benchmark nearest neighbor recovery');
 title('PCA Recovery Errors');
 hold off;
+
+%sort the benchmark errors in ascending order, and reorder the Stiefel center errors correspondingly
+[error_bm_sort, indexes] = sort(error_bm, 1, 'ascend');
+error_c_sort = error_c(indexes);
+%plot
+figure;
+plot(error_c_sort, '-*', 'Color', [1 0 0], 'LineWidth', 1, 'MarkerSize', 5, 'MarkerIndices', 1:2:test_size);
+hold on;
+plot(error_bm_sort, '-*', 'Color', [0 0 1], 'LineWidth', 1, 'MarkerSize', 5, 'MarkerIndices', 1:2:test_size);
+xlabel('Reordered Index of test sample');
+ylabel('Recovery error');
+legend('Stiefel Euclidean center recovery', 'benchmark nearest neighbor recovery');
+title('PCA Recovery Errors');
+hold off;
+
+%plot
+figure;
+plot(sort(error_c_sort - error_bm_sort, 'descend'), '-*', 'Color', [0 0 0], 'LineWidth', 1, 'MarkerSize', 5, 'MarkerIndices', 1:2:test_size);
+hold on;
+xlabel('Reordered index of test sample');
+ylabel('Error\_c - Error\_bm');
+title('Difference in PCA Recovery Errors');
+hold off;
+
+
 
 
 function [sift_train, Seq, leafs, sift_test] = SIFT_PCA_train(kd_siftStiefel, train_size, ht, test_size)
