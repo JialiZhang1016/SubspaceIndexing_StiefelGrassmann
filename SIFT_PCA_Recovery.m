@@ -14,7 +14,7 @@ train_size = 100*2^13;
 %ht = the partition tree height
 ht = 13;
 %test_size = the SIFT test data size
-test_size = 10;
+test_size = 500;
 
 %set the sequence of interpolation numbers and the threshold ratio for determining the interpolation number
 interpolation_number_seq = ones(test_size, 1);
@@ -32,6 +32,10 @@ ratio_threshold = 1.001;
 %sift_test = the sift test data set, size is test_size
 [sift_train, Seq, leafs, sift_test] = SIFT_PCA_train(kd_siftStiefel, train_size, ht, test_size);
 
+%all these Stiefel frames are on St(n, p), actually n=128 and p=kd_siftStiefel
+n = size(Seq, 1);
+p = size(Seq, 2);
+
 %sift original dimension
 kd_sift = size(sift_test, 2);
 
@@ -46,7 +50,10 @@ end
 %    Recover x from its PCA projection y = A_k x by considering x_hat = A_k^- y where A_k^- is the pseudo-inverse of A_k
 %(2) Find the nearest (interpolation_number) cluster centers m_k1, m_k2, m_k(interpolation number) from m_1, ..., m_{2^{ht}}
 %    interpolation_number is determined by |x-m_k(interpolation_number+1)| > ratio_threshold * |x-m_k1|
-%    Find the weights w_i = exp(-|x-m_i|^2) for i = 1, ..., interpolation_number and calculate the Stiefel mean A^c_k from f_F(A)=\sum_{i=1}^interpolation_number w_i |A-A_ki|_F^2
+%    Find the weights w_i = exp(-|x-m_i|^2) for i = 1, ..., interpolation_number and calculate the Stiefel mean A^c_k 
+%    Stiefel mean A^c_k are chosen 
+%        (1) from Euclidean norm: f_F(A)=\sum_{i=1}^interpolation_number w_i |A-A_ki|_F^2, using GD/direct method
+%        (2) from retraction method: 
 %    Recover x from its PCA projection y^c = A^c_k x by considering x_hat^c = (A^c_k)^- y where (A^c_k)^- is the pseudo-inverse of A^c_k
 %Compare the two recover errors error_bm=|x-x_hat| and error_c=|x-x_hat^c| over sift_test
 %Geometric insights suggest that the latter error may be smaller, i.e., the recover is more efficient
@@ -56,13 +63,14 @@ K = 1e-8; %the scaling coefficient for calculating the weights w = e^{-K distanc
 error_bm = zeros(test_size, 1); %recovery errors for the nearest frame, benchmark
 error_c = zeros(test_size, 1);  %recovery errors using the Stiefel center method
 
-doGD = 0; %do or do not do GD
+doEuclideanCenter = 1; %do or do not do Euclidean center of mass
+doGD = 1; %do or do not do GD for finding Euclidean center of mass
 
 tic;
 for test_index=1:test_size
     fprintf("\ntest point %d -----------------------------------------------------------\n", test_index);
     x = sift_test(test_index, :);
-    %Sort the cluster centers m_1, ..., m_{2^{ht}} by ascending distances to x 
+    %sort the cluster centers m_1, ..., m_{2^{ht}} by ascending distances to x 
     dist = zeros(2^ht, 1);
     for k=1:2^ht
         dist(k) = norm(x-m(:, k));
@@ -89,33 +97,35 @@ for test_index=1:test_size
     %find the weights w_1, ..., w_{interpolation_number} for the first (interpolation_number) closest clusters to x
     w = zeros(interpolation_number, 1);
     for i=1:interpolation_number
-        w(i) = exp(-K*(dist_sort(i))^2);
+        w(i) = exp(- K * (dist_sort(i))^2);
     end
     %obtain the projection y = A_k1 x and the recovery x_hat = (A_k1)^- y, calculate error_bm=|x-x_hat|
     y = x * frames(:, :, 1);
     x_hat = y * pinv(frames(:, :, 1));
     error_bm(test_index) = norm(x-x_hat);
-    %obtain the Euclidean center of mass A_c on St(p,n) for A_k1, ..., A_k{interpolation_number} under weights w_1, ..., w_{interpolation_number}
-    %choose an initial frame to start the GD, randomly selected from A_k1, ..., A_k{interpolation_number}
-    init_label = randi(interpolation_number);
-    A = frames(:, :, init_label);
-    %all these frames are on St(n, p), actually n=128 and p=kd_siftStiefel
-    n = size(A, 1);
-    p = size(A, 2);
-    %Set the parameters for GD on Stiefel St(p, n)
-    iteration = 1000;
-    lr = 0.01;
-    lrdecayrate = 1;
+    %Obtain the Euclidean center of mass A_c on St(p,n) for A_k1, ..., A_k{interpolation_number} under weights w_1, ..., w_{interpolation_number}
+    %set the Stiefel Optimization object with given threshold parameters
     gradnormthreshold = 1e-4;
     checkonStiefelthreshold = 1e-10;
     %bulid the Stiefel Optimization Object
-    StiefelOpt = Stiefel_Optimization(w, frames, iteration, lr, lrdecayrate, gradnormthreshold, checkonStiefelthreshold);
-    %find the Euclidean center of mass A_c
-    %compare the two methods, do GD or direct calculation
-    if doGD
-        [fseq, gradfnormseq, distanceseq, A_c] = StiefelOpt.GD_Stiefel_Euclid(A);
+    StiefelOpt = Stiefel_Optimization(w, frames, gradnormthreshold, checkonStiefelthreshold);
+    %find the center of mass A_c
+    %compare several methods: Euclidean center of mass, direct or via GD, or Retraction-based center of mass
+    if doEuclideanCenter
+        if doGD
+            %choose an initial frame to start the GD, randomly selected from A_k1, ..., A_k{interpolation_number}
+            init_label = randi(interpolation_number);
+            A = frames(:, :, init_label);
+            %Set the parameters for GD on Stiefel St(p, n)
+            iteration = 1000;
+            lr = 0.001;
+            lrdecayrate = 1;
+            [fseq, gradfnormseq, distanceseq, A_c] = StiefelOpt.GD_Stiefel_Euclid(A, iteration, lr, lrdecayrate);
+        else
+            [minvalue, gradminfnorm, A_c] = StiefelOpt.CenterMass_Stiefel_Euclid;
+        end
     else
-        [minvalue, gradminfnorm, A_c] = StiefelOpt.CenterMass_Stiefel_Euclid(A);
+        break;
     end
     %obtain the projection y = A_c x and the recovery x_hatc = (A_c)^- y, calculate error_c=|x-x_hatc|
     y = x * A_c;
@@ -136,7 +146,7 @@ toc;
 fprintf("rate that interpolated mean projection recovery efficiency is better than nearest neighbor = %f %% \n", counter_success/test_size*100);
 fprintf("mean of Error-c = %f, mean of Error-bm = %f \n", mean(error_c), mean(error_bm));
 
-%plot
+%plot the PCA recovery errors
 figure;
 plot(error_c, '-*', 'Color', [1 0 0], 'LineWidth', 1, 'MarkerSize', 5, 'MarkerIndices', 1:2:test_size);
 hold on;
@@ -150,7 +160,7 @@ hold off;
 %sort the benchmark errors in ascending order, and reorder the Stiefel center errors correspondingly
 [error_bm_sort, indexes] = sort(error_bm, 1, 'ascend');
 error_c_sort = error_c(indexes);
-%plot
+%plot the PCA recovery errors with ascending benchmark error
 figure;
 plot(error_c_sort, '-*', 'Color', [1 0 0], 'LineWidth', 1, 'MarkerSize', 5, 'MarkerIndices', 1:2:test_size);
 hold on;
@@ -161,7 +171,7 @@ legend('Stiefel Euclidean center recovery', 'benchmark nearest neighbor recovery
 title('PCA Recovery Errors');
 hold off;
 
-%plot
+%plot the differences of PCA recovery errors
 figure;
 plot(sort(error_c_sort - error_bm_sort, 'descend'), '-*', 'Color', [0 0 0], 'LineWidth', 1, 'MarkerSize', 5, 'MarkerIndices', 1:2:test_size);
 hold on;
@@ -199,7 +209,7 @@ function [sift_train, Seq, leafs, sift_test] = SIFT_PCA_train(kd_siftStiefel, tr
 %        sifts: [10068850×128 uint8]
 %    sift_offs: [1×33590 double]
 
-load ~/文档/work_SubspaceIndexingStiefleGrassmann/Code_Subspace_indexing_Stiefel_Grassman/cdvs-sift300-dataset.mat;
+load ~/文档/work_SubspaceIndexingStiefleGrassmann/Code_Subspace_indexing_Stiefel_Grassman/cdvs-sift300-dataset.mat sifts
 
 %n_sift=10068850 is the number of samples in sifts dataset, kd_sift is the original dimension of each sample
 %kd_sift=128

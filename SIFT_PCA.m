@@ -2,55 +2,58 @@
 
 %author: Wenqing Hu (Missouri S&T)
 
-%Generate from SIFT data the local frames A_1, ..., A_{256}
+%Generate from SIFT data the local frames A_1, ..., A_{2^ht}
 %Find their center of mass A in Euclidean norm under weight w_k = exp(-d_k^2) where d_k is the SIFT distance to each cluster's centroid  
 %Test the PCA energy spectrum for SIFT projection on A
 
-%Finding the Euclidean Center of Mass for A_1, ..., A_256 under weights w_k via Gradient Descent on Stiefel Manifolds
-%Given objective function f_F(A)=\sum_{k=1}^256 \omega_k \|A-A_k\|_F^2 where A, A_k\in St(p, n)
-%Use Gradient Descent to find min_A f_F(A) 
+%Finding the Euclidean Center of Mass for A_1, ..., A_{2^ht} under weights w_k via Gradient Descent on Stiefel Manifolds
+%Given objective function f_F(A)=\sum_{k=1}^{2^ht} \omega_k \|A-A_k\|_F^2 where A, A_k\in St(p, n)
+%Use Gradient Descent/Direct Method to find min_A f_F(A) 
 
 
 clearvars;
 clear classes;
 
-%set the A_1,...,A_m on St(p, n) and the weight sequence 
-%the initial point A on St(p, n) is chosen as one of the A_k's
-
+%set the A_1,...,A_m on St(p, n) and the weight sequence, m=2^ht
+%the partition tree height
+ht = 10;
+%the sift_sample size
+sample_size = 100 * 2^ht;
 %the PCA embedding dimension = kd_siftStiefel
 kd_siftStiefel = 16;
 %select the sift_sample in SIFT dataset that we will be working on
 %generate A_1,...,A_m and omega_1,...,omega_m
-[Seq, omega, sift_sample] = SIFT_PCA_traincluster(kd_siftStiefel);
+[Seq, omega, sift_sample] = SIFT_PCA_traincluster(sample_size, kd_siftStiefel, ht);
 
+%all these frames are on St(n, p), actually n=128 and p=kd_siftStiefel
+n = size(Seq, 1);
+p = size(Seq, 2);
+
+%Set the Stiefel Optimization object with given threshold parameters
+gradnormthreshold = 1e-4;
+checkonStiefelthreshold = 1e-10;
+
+StiefelOpt = Stiefel_Optimization(omega, Seq, gradnormthreshold, checkonStiefelthreshold);
+
+tic;
 %choose an initial frame to start the GD, randomly selected from A_1,...,A_m
 %rng(1, 'twister');
 m = length(Seq);
 init_label = randi(m);
 A = Seq(:, :, init_label);
-
-%all these frames are on St(n, p), actually n=128 and p=kd_siftStiefel
-n = size(A, 1);
-p = size(A, 2);
-
 %Set the parameters for GD on Stiefel St(p, n)
-iteration = 6000;
+iteration = 1000;
 lr = 0.01;
 lrdecayrate = 1;
-gradnormthreshold = 1e-4;
-checkonStiefelthreshold = 1e-10;
-
-StiefelOpt = Stiefel_Optimization(omega, Seq, iteration, lr, lrdecayrate, gradnormthreshold, checkonStiefelthreshold);
-
-tic;
-[fseq, gradfnormseq, distanceseq, minf1] = StiefelOpt.GD_Stiefel_Euclid(A);
+[fseq, gradfnormseq, distanceseq, minf1] = StiefelOpt.GD_Stiefel_Euclid(A, iteration, lr, lrdecayrate);
 toc;
 
+%use the direct Stiefel Euclidean center of mass method
 tic;
-[minfvalue2, gradminfnorm2, minf2] = StiefelOpt.CenterMass_Stiefel_Euclid(A);
+[minfvalue2, gradminfnorm2, minf2] = StiefelOpt.CenterMass_Stiefel_Euclid;
 toc;
 
-doplotGD = 1; %plot the GD or the direct method
+doplotGD = 0; %plot the GD or the direct method
 
 if doplotGD
 
@@ -86,7 +89,9 @@ end
 
 %output the center of mass and check if it is still on Stiefel manifold
 disp(minf);
+[value, gradnorm] = StiefelOpt.gradientStiefel_Euclid(minf);
 fprintf("the center is given by the above matrix of size %d times %d\n", n, p);
+fprintf("the minimal value is given by %f, gradient norm is given by %f\n", value, gradnorm);
 [ifStiefel, distance] = StiefelOpt.CheckOnStiefel(minf);
 fprintf("if still on Stiefel= %d, distance to Stiefel= %f\n", ifStiefel, distance);
 
@@ -140,7 +145,7 @@ ylabel('eigenvalues');
 title('sift projected onto the center of mass Stiefel matrix pca eigenvalues');
 
 
-function [Seq, omega, sift_sample] = SIFT_PCA_traincluster(kd_siftStiefel)
+function [Seq, omega, sift_sample] = SIFT_PCA_traincluster(sample_size, kd_siftStiefel, ht)
 
 %from the SIFT data set train a sequence of frames A_1, ..., A_m on St(p, n)
 %first train a global SIFT PCA embedding A_0
@@ -148,7 +153,9 @@ function [Seq, omega, sift_sample] = SIFT_PCA_traincluster(kd_siftStiefel)
 %from this partition, calculate the weights w_k=exp(-d_k^2) where d_k is the distance on SIFT dataset from the SIFT mean to the mean at each cluster
 %return [A_1, ..., A_m] and [w_1, ..., w_m]
 
+%the kd-partition tree height = ht
 %the PCA embedding dimension = kd_siftStiefel
+%the sift sample size = sample_size
 
 %load the sift dataset
 %structure: 
@@ -159,15 +166,15 @@ function [Seq, omega, sift_sample] = SIFT_PCA_traincluster(kd_siftStiefel)
 %        sifts: [10068850×128 uint8]
 %    sift_offs: [1×33590 double]
 
-load ~/文档/work_SubspaceIndexingStiefleGrassmann/Code_Subspace_indexing_Stiefel_Grassman/cdvs-sift300-dataset.mat;
+load ~/文档/work_SubspaceIndexingStiefleGrassmann/Code_Subspace_indexing_Stiefel_Grassman/cdvs-sift300-dataset.mat sifts
 
 %n_sift is the number of samples in sifts dataset, kd_sift is the original dimension of each sample
 %kd_sift=128
 [n_sift, kd_sift] = size(sifts);
 
-%randomly pick 204800 samples from sift dataset, for partition purposes
+%randomly pick sample_size samples from sift dataset, for partition purposes
 offs = randperm(n_sift); 
-offs = offs(1: 200*2^10);
+offs = offs(1: sample_size);
 %form the sift_sample dataset
 sift_sample = double(sifts(offs, :));
 
@@ -187,16 +194,13 @@ if doplotPCAspectrum
     ylabel('eigenvalues');
     title('sift pca eigenvalues');
 end
+ 
 
-%set the kd-partition tree height = ht
-ht = 8; 
-
-%bulid a 12-dimensional embedding of sift_samples in x0
+%bulid a kd_siftStiefel-dimensional embedding of sift_samples in x0
 x0 = sift_sample * A0(:, 1:kd_siftStiefel);
 
 %from x0, partition into 2^ht leaf nodes, each leaf node can give samples for a local PCA
 [indx, leafs]=buildVisualWordList(x0, ht);
-
 
 %the weight sequence
 omega = zeros(length(leafs), 1);
@@ -222,6 +226,5 @@ if doBuildSiftModel
         Seq(:, :, k) = A{k}(:, 1:kd_siftStiefel); 
     end
 end    
-
 
 end

@@ -9,9 +9,6 @@ classdef Stiefel_Optimization
 properties  
     omega %the weight sequence
     Seq   %the sequence of pointes on St(p, n)
-    iteration %number of iterations
-    lr        %learning rate
-    lrdecayrate  %learning rate decay rate
     gradnormthreshold   %the threshold for gradient norm
     checkonStiefelthreshold  %the threshold for checking if iteration is still on St(p, n)
 end  
@@ -21,13 +18,10 @@ end
 methods
     
 %class constructive function
-function self = Stiefel_Optimization(omega, Seq, iteration, lr, lrdecayrate, gradnormthreshold, checkonStiefelthreshold)           
+function self = Stiefel_Optimization(omega, Seq, gradnormthreshold, checkonStiefelthreshold)           
     if nargin > 0  
         self.omega = omega;  
         self.Seq = Seq;  
-        self.iteration = iteration;  
-        self.lr = lr;
-        self.lrdecayrate = lrdecayrate;
         self.gradnormthreshold = gradnormthreshold;
         self.checkonStiefelthreshold = checkonStiefelthreshold;
     end  
@@ -48,13 +42,13 @@ function [f, gradf] = gradientStiefel_Euclid(self, Y)
     end
 end
 
+
 %directly calculate the Euclidean center of mass that is the St(p, n) minimizer of f_F(A)=\sum_{k=1}^m w_k\|A-A_k\|_F^2
-%according to Professor Tiefeng Jiang's elegant lemma based on SVD
-function [minvalue, gradminfnorm, minf] = CenterMass_Stiefel_Euclid(self, Y)
-    A = Y;
+%according to our elegant lemma based on SVD
+function [minvalue, gradminfnorm, minf] = CenterMass_Stiefel_Euclid(self)
     m = length(self.omega);
-    n = size(Y, 1);
-    p = size(Y, 2);
+    n = size(self.Seq, 1);
+    p = size(self.Seq, 2);
     B = zeros(n, p);
     for i=1:m
         B = B + self.omega(i) * self.Seq(:, :, i);
@@ -68,17 +62,18 @@ function [minvalue, gradminfnorm, minf] = CenterMass_Stiefel_Euclid(self, Y)
     gradminfnorm = norm(gradminf, 'fro');
 end
 
+
 %gradient descent on Stiefel Manifolds
 %GD_Stiefel_Euclid can find the Euclidean Center of Mass via Gradient Descent on Stiefel Manifolds
 %Given objective function f_F(A)=\sum_{k=1}^m \omega_k \|A-A_k\|_F^2 where A, A_k\in St(p, n)
 %Use Gradient Descent to find min_A f_F(A) 
-function [fseq, gradfnormseq, distanceseq, minf] = GD_Stiefel_Euclid(self, Y)
-    learning_rate = self.lr; %when doing learning rate decay we do not want to change the lr in the class, just local
-    fseq = zeros(self.iteration, 1);
-    gradfnormseq = zeros(self.iteration, 1);
-    distanceseq = zeros(self.iteration, 1);
+function [fseq, gradfnormseq, distanceseq, minf] = GD_Stiefel_Euclid(self, Y, iteration, lr, lrdecayrate)
+    learning_rate = lr; 
+    fseq = zeros(iteration, 1);
+    gradfnormseq = zeros(iteration, 1);
+    distanceseq = zeros(iteration, 1);
     A = Y;
-    for i = 1:self.iteration
+    for i = 1:iteration
         %record the previous step
         A_previous = A;
         %calculate the function value and gradient on Stiefel
@@ -86,10 +81,13 @@ function [fseq, gradfnormseq, distanceseq, minf] = GD_Stiefel_Euclid(self, Y)
         %record the function value and gradient norm
         fseq(i) = f;
         gradfnormseq(i) = norm(gradf, 'fro');
-        %if the gradient norm is small than the threshold value, then decay the stepsize exponentially
-        %we are able to tune the decay rate, and so far due to convexity it seems not decay is the best option
-        if norm(gradf, 'fro') < self.gradnormthreshold
-            learning_rate = learning_rate * self.lrdecayrate;
+        %if the gradient norm is smaller than 0.1 times the threshold value, stop iteration 
+        if norm(gradf, 'fro') < 0.1 * self.gradnormthreshold
+            break;
+        elseif norm(gradf, 'fro') < self.gradnormthreshold
+            %if the gradient norm is smaller than the threshold value, then decay the stepsize exponentially
+            %we are able to tune the decay rate, and so far due to convexity it seems not decay is the best option
+            learning_rate = learning_rate * lrdecayrate;
         end
         %gradient descent on Stiefel, obtain the new step A
         H = learning_rate * (-1) * gradf;
@@ -178,6 +176,7 @@ function [prj_tg] = projection_tangent(self, Y, Z)
     prj_tg = Y * skew + (eye(n) - Y * Y') * Z;
 end
        
+
 end %end of class methods
   
 end %end of class
