@@ -9,7 +9,8 @@ classdef Stiefel_Optimization
 properties  
     omega %the weight sequence
     Seq   %the sequence of pointes on St(p, n)
-    gradnormthreshold   %the threshold for gradient norm
+    gradnormthreshold   %the threshold for gradient norm when using GD
+    fixedpointthreshold %the threshold for fixed-point iteration for average
     checkonStiefelthreshold  %the threshold for checking if iteration is still on St(p, n)
 end  
 
@@ -18,14 +19,121 @@ end
 methods
     
 %class constructive function
-function self = Stiefel_Optimization(omega, Seq, gradnormthreshold, checkonStiefelthreshold)           
+function self = Stiefel_Optimization(omega, Seq, gradnormthreshold, fixedpointthreshold, checkonStiefelthreshold)           
     if nargin > 0  
         self.omega = omega;  
         self.Seq = Seq;  
         self.gradnormthreshold = gradnormthreshold;
+        self.fixedpointthreshold = fixedpointthreshold;
         self.checkonStiefelthreshold = checkonStiefelthreshold;
     end  
-end 
+end
+
+
+%calculate the QR-decomposition type retraction Q = P_X(V) where X in St(p, n), V in T_X(St(p, n)) and Q in St(p, n)
+function [Q, R] = Retraction_QR(self, X, V)
+    n_X = size(X, 1);
+    p_X = size(X, 2);
+    n_V = size(V, 1);
+    p_V = size(V, 2);
+    if (n_X == n_V) && (p_X == p_V)
+        Mtx = X + V;
+        [Q, R] = qr(Mtx);
+        D = diag(sign(diag(R)));
+        zeroD = zeros(n_X-size(D, 1), n_X-size(D, 1));
+        zero1 = zeros(size(D, 1), n_X-size(D, 1));
+        zero2 = zeros(n_X-size(D, 1), size(D, 1));
+        D = [D zero1; zero2 zeroD];
+        Q = Q * D; R = D * R;
+        Q = Q(:, 1:p_X);
+        R = R(1:p_X, :);
+    else
+        fprintf("QR Retraction Q=P_X(V): size Error!\n");
+        fprintf("size of X is (%d, %d), size of V is (%d, %d)\n", size(X, 1), size(X, 2), size(V, 1), size(V, 2));
+    end
+end
+
+
+%calculate the QR-decomposition type lifting V = P_X^{-1}(Q) where X in St(p, n), Q in St(p, n) and V in T_X(St(p, n))
+function [V, R] = Lifting_QR(self, X, Q)
+    n_X = size(X, 1);
+    p_X = size(X, 2);
+    n_Q = size(Q, 1);
+    p_Q = size(Q, 2);
+    if (n_X == n_Q) && (p_X == p_Q) 
+        Mtx = X' * Q;
+        R = zeros(p_X, p_X);
+        if Mtx(1, 1) > 0
+            R(1, 1) = 1/Mtx(1, 1);
+        else
+            fprintf("QR Lifting P_X^{-1}(Q): Minor(1,1)<=0 Error!\n");
+            fprintf("X=\n"); disp(X);
+            fprintf("Q=\n"); disp(Q);
+            fprintf("M=\n"); disp(M);
+            return;
+        end
+        for i = 2:p_X
+           M_tilde_i = Mtx(1:i, 1:i);
+           if det(M_tilde_i) ~= 0
+              b_i = zeros(i, 1);
+              for j = 1:i-1
+                  b_i(j) = - Mtx(i, 1:j)' * R(1:j, j);
+              end
+              b_i(i) = 1;
+              r_tilde_i = linsolve(M_tilde_i, b_i);
+              R(:, i) = [r_tilde_i; zeros(p_X-i, 1)];
+           else
+              fprintf("QR Lifting P_X^{-1}(Q): det(M_tilde_i) = 0 Error!\n");
+              fprintf("X=\n"); disp(X);
+              fprintf("Q=\n"); disp(Q);
+              fprintf("M=\n"); disp(M);
+              fprintf("M_tilde_i=\n"); disp(M_tilde_i);
+              return;
+           end
+           if R(i, i) <= 0
+              fprintf("QR Lifting P_X^{-1}(Q): R(i, i) <=0 Error!\n");
+              fprintf("X=\n"); disp(X);
+              fprintf("Q=\n"); disp(Q);
+              fprintf("R=\n"); disp(R);
+              return;
+           end
+        end
+        V = Q * R - X;
+    else
+        fprintf("QR Lifting P_X^{-1}(Q): size Error!\n");
+        fprintf("size of X is (%d, %d) and size of Q is (%d, %d)\n", size(X, 1), size(X, 2), size(Q, 1), size(Q, 2));
+    end
+end
+
+
+%using fixed-point iteration, calculate the QR-decomposition type retraction-based center of mass of A_k with weights w_k
+function [QR_Retraction_Center] = Center_Mass_Stiefel_QR_Retraction(self, Y, iteration)
+    A = Y;
+    m = length(self.omega);
+    n = size(self.Seq, 1);
+    p = size(self.Seq, 2);
+    V_new = zeros(n, p);
+    for k = 1:m
+        [V, R] = self.Lifting_QR(self.Seq(:, :, k), A);
+        V_new = V_new + self.omega(k) * V;
+    end
+    for i=1:iteration
+        [A_new, R] = self.Retraction_QR(A, V_new);
+        error = norm(A_new-A, 'fro');
+        fprintf("iteration = %d, fixed point iteration error = %f\n", i, error);
+        disp(A_new);
+        if error < self.fixedpointthreshold
+            break;
+        end
+        A = A_new;
+        V_new = zeros(n, p);
+        for k = 1:m
+            [V, R] = self.Lifting_QR(self.Seq(:, :, k), A);
+            V_new = V_new + self.omega(k) * V;
+        end
+    end
+    QR_Retraction_Center = A;
+end
 
 
 %calculate the function value and the gradient on Stiefel manifold St(p, n) of the Euclidean center of mass function 
@@ -109,7 +217,7 @@ function [fseq, gradfnormseq, distanceseq, minf] = GD_Stiefel_Euclid(self, Y, it
     minf = A;
 end
 
-      
+     
 %test if the given matrix Y is on the Stiefel manifold St(p, n)
 %Y is the matrix to be tested, threshold is a threshold value, if \|Y^TY-I_p\|_F < threshold then return true
 function [ifStiefel, distance] = CheckOnStiefel(self, Y)
