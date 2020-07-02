@@ -14,7 +14,7 @@ train_size = 100*2^13;
 %ht = the partition tree height
 ht = 13;
 %test_size = the SIFT test data size
-test_size = 500;
+test_size = 5;
 
 %set the sequence of interpolation numbers and the threshold ratio for determining the interpolation number
 interpolation_number_seq = ones(test_size, 1);
@@ -106,9 +106,11 @@ for test_index=1:test_size
     %Obtain the Euclidean center of mass A_c on St(p,n) for A_k1, ..., A_k{interpolation_number} under weights w_1, ..., w_{interpolation_number}
     %set the Stiefel Optimization object with given threshold parameters
     gradnormthreshold = 1e-4;
+    fixedpointthreshold = 1e-4;
     checkonStiefelthreshold = 1e-10;
+    LogStiefelthreshold = 1e-4;
     %bulid the Stiefel Optimization Object
-    StiefelOpt = Stiefel_Optimization(w, frames, gradnormthreshold, checkonStiefelthreshold);
+    StiefelOpt = Stiefel_Optimization(w, frames, gradnormthreshold, fixedpointthreshold, checkonStiefelthreshold, LogStiefelthreshold);
     %find the center of mass A_c
     %compare several methods: Euclidean center of mass, direct or via GD, or Retraction-based center of mass
     if doEuclideanCenter
@@ -125,7 +127,7 @@ for test_index=1:test_size
             [minvalue, gradminfnorm, A_c] = StiefelOpt.CenterMass_Stiefel_Euclid;
         end
     else
-        break;
+        break;   
     end
     %obtain the projection y = A_c x and the recovery x_hatc = (A_c)^- y, calculate error_c=|x-x_hatc|
     y = x * A_c;

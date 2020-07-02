@@ -12,6 +12,7 @@ properties
     gradnormthreshold   %the threshold for gradient norm when using GD
     fixedpointthreshold %the threshold for fixed-point iteration for average
     checkonStiefelthreshold  %the threshold for checking if iteration is still on St(p, n)
+    LogStiefelthreshold %the threshold for calculating the Stiefel logarithmic map
 end  
 
    
@@ -19,13 +20,14 @@ end
 methods
     
 %class constructive function
-function self = Stiefel_Optimization(omega, Seq, gradnormthreshold, fixedpointthreshold, checkonStiefelthreshold)           
+function self = Stiefel_Optimization(omega, Seq, gradnormthreshold, fixedpointthreshold, checkonStiefelthreshold, LogStiefelthreshold)           
     if nargin > 0  
         self.omega = omega;  
         self.Seq = Seq;  
         self.gradnormthreshold = gradnormthreshold;
         self.fixedpointthreshold = fixedpointthreshold;
         self.checkonStiefelthreshold = checkonStiefelthreshold;
+        self.LogStiefelthreshold = LogStiefelthreshold;
     end  
 end
 
@@ -69,7 +71,7 @@ function [V, R] = Lifting_QR(self, X, Q)
             fprintf("QR Lifting P_X^{-1}(Q): Minor(1,1)<=0 Error!\n");
             fprintf("X=\n"); disp(X);
             fprintf("Q=\n"); disp(Q);
-            fprintf("M=\n"); disp(M);
+            fprintf("M=\n"); disp(Mtx);
             return;
         end
         for i = 2:p_X
@@ -77,7 +79,7 @@ function [V, R] = Lifting_QR(self, X, Q)
            if det(M_tilde_i) ~= 0
               b_i = zeros(i, 1);
               for j = 1:i-1
-                  b_i(j) = - Mtx(i, 1:j)' * R(1:j, j);
+                  b_i(j) = - Mtx(i, 1:j) * R(1:j, j);
               end
               b_i(i) = 1;
               r_tilde_i = linsolve(M_tilde_i, b_i);
@@ -121,7 +123,7 @@ function [QR_Retraction_Center] = Center_Mass_Stiefel_QR_Retraction(self, Y, ite
         [A_new, R] = self.Retraction_QR(A, V_new);
         error = norm(A_new-A, 'fro');
         fprintf("iteration = %d, fixed point iteration error = %f\n", i, error);
-        disp(A_new);
+        %disp(A_new);
         if error < self.fixedpointthreshold
             break;
         end
@@ -199,16 +201,14 @@ function [fseq, gradfnormseq, distanceseq, minf] = GD_Stiefel_Euclid(self, Y, it
         end
         %gradient descent on Stiefel, obtain the new step A
         H = learning_rate * (-1) * gradf;
-        [M, N, Q] = self.ExpStiefel(A, H);
-        A = A * M + Q * N;        
+        [M, N, Q, A] = self.ExpStiefel(A, H);      
         %check if this A is still on Stiefel manifold
         [ifStiefel, distanceseq(i)] = self.CheckOnStiefel(A);
         %if not, pull it back to Stiefel manifold using the projection and another exponential map
         if ~ifStiefel
             Z = A - A_previous;
             prj_tg = self.projection_tangent(A_previous, Z);
-            [M, N, Q] = self.ExpStiefel(A_previous, prj_tg);
-            A = A_previous * M + Q * N;
+            [M, N, Q, A] = self.ExpStiefel(A_previous, prj_tg);
         end
         %print the iteration value and gradient norm
         fprintf("iteration %d, value= %f, gradnorm= %f\n", i, f, norm(gradf, 'fro'));
@@ -256,8 +256,8 @@ end
 
 %Exponential Map on Stiefel manifold St(p, n)
 %Y is the matrix on St(p, n) and H is the tangent vector
-%returns M, N, Q and based on them one can calculate exp_Y(H)=YM+QN
-function [M, N, Q] = ExpStiefel(self, Y, H)
+%returns M, N, Q and based on them one can calculate exp_Y(H) = YM+QN
+function [M, N, Q, exp] = ExpStiefel(self, Y, H)
     n = size(Y, 1);
     p = size(Y, 2);
     W = (eye(n) - Y*Y') * H;
@@ -271,7 +271,41 @@ function [M, N, Q] = ExpStiefel(self, Y, H)
     Multiply = Exponential*i;
     M = Multiply(1:p, :);
     N = Multiply(p+1:2*p, :);
+    exp = Y * M + Q * N;
 end
+
+%Logarithmic Map on Stiefel manifold St(p, n)
+%Y is the matrix on St(p, n) and Y_tilde is another matrix on St(p, n) close to Y
+%returns A, B, Q such that one can calculate log_Y(Y_tilde) = H = YA+QB
+%guarentees exp_Y(H) = Y_tilde with desired precision
+function [A, B, Q, log] = LogStiefel(self, Y, Y_tilde, iteration)
+    n = size(Y, 1);
+    p = size(Y, 2);
+    M = Y' * Y_tilde;
+    [Q, N] = qr(Y_tilde - Y * M);
+    Q = Q(:, 1:p); N = N(1:p, :);
+    Mtx = [M; N];
+    [O1, D, O2] = svd(Mtx);
+    O2_ext = [O2 zeros(p, p); zeros(p, p) eye(p)]; 
+    V = O1 * O2_ext';
+    disp(V);
+    disp(Mtx);
+    disp(V'*V);
+    disp(D);
+    for k = 1:iteration
+        Log_Matrix = logm(V);
+        A = Log_Matrix(1:p, 1:p);
+        B = Log_Matrix(p+1:2*p, 1:p);
+        C = Log_Matrix(p+1:2*p, p+1:2*p);
+        if norm(C, 'fro') < self.LogStiefelthreshold
+            break;
+        end
+        Phi = expm(-C);
+        W = [eye(p) zeros(p, p); zeros(p, p) Phi];
+        V = V * W;
+    end
+    log = Y * A + Q * B;
+end    
 
 
 %calculate the projection onto tangent space of Stiefel manifold St(p, n)
