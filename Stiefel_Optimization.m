@@ -34,20 +34,20 @@ end
 
 
 function [Q] = Complete_SpecialOrthogonal(self, A)
-%given the matrix A in St(p, n), complete it into Q = [A_tilde B] in SO(n), where A_tilde in St(p, n) and column_span(A_tilde) = column_span(A)
-   n = size(self.Seq(:, :, 1), 1);
-   p = size(self.Seq(:, :, 1), 2);
-   B = [zeros(n-p, p); eye(p)];
-   Mtx = [A B];
-   [Q, R] = qr(Mtx);
+%given the matrix A in St(p, n), complete it into Q = [A B] in SO(n)
+   n = size(A, 1);
+   p = size(A, 2);
+   [O1, D, O2] = svd(A);
+   O2_ext = [O2 zeros(p, n-p); zeros(n-p, p) eye(n-p)]; 
+   Q = O1 * O2_ext';
    if det(Q) < 0
-       Q(:, 1) = -Q(:, 1);
-   end
+       Q(:, p+1) = -Q(:, p+1);
+   end    
 end    
 
 
 function [SO_Lifting_Center] = Center_Mass_SO_Lifting(self, Q, iteration)
-%complete every St(p, n) matrix in Seq to SO(n) matrix, and average on SO(n) with respect to weights omega 
+%complete every St(p, n) matrix in Seq to SO(n) matrix, using fixed point iteration to average them on SO(n) with respect to weights w 
    n = size(self.Seq(:, :, 1), 1); 
    p = size(self.Seq(:, :, 1), 2);
    m = length(self.omega);
@@ -73,7 +73,50 @@ function [SO_Lifting_Center] = Center_Mass_SO_Lifting(self, Q, iteration)
    end    
 end
 
-    
+
+function [GD_SO_Lifting_Center, gradnormseq, distanceseq] = Center_Mass_GD_SO_Lifting(self, Y, iteration, lr, lrdecayrate)
+%complete every St(p, n) matrix in Seq to SO(n) matrix, using gradient descent on SO(n) to average them on SO(n) with respect to weights w 
+   n = size(Y, 1); 
+   p = size(Y, 2);
+   learning_rate = lr;
+   m = length(self.omega);
+   gradnormseq = zeros(iteration, 1);
+   distanceseq = zeros(iteration, 1);
+   SO_Seq = zeros(n, n, m);
+   for k = 1:m
+       SO_Seq(:, :, k) = self.Complete_SpecialOrthogonal(self.Seq(:, :, k));
+   end
+   A = self.Complete_SpecialOrthogonal(Y);
+   for i = 1:iteration
+       Mtx = zeros(n, n);
+       for k = 1:m
+           Mtx = Mtx + self.omega(k) * logm(A' * SO_Seq(:, :, k));
+       end
+       fprintf("det(A) = %f, det(SO_Seq) = %f\n", det(A), det(SO_Seq(:, :, k)));
+       gradnorm = norm(Mtx, 'fro');
+       gradnormseq(i) = gradnorm;
+       if gradnorm < 0.1 * self.threshold_gradnorm   
+           break;
+       else
+           if gradnorm < self.threshold_gradnorm   
+               learning_rate = learning_rate * lrdecayrate;
+           end
+       end
+       A_previous = A;
+       A = A * expm(- learning_rate * Mtx);
+       %check if this A is still on SO(n)
+       [ifStiefel, distanceseq(i)] = self.CheckOnStiefel(A);
+       fprintf("iteration = %d, gradient norm = %f, distance to SO = %f\n", i, gradnorm, distanceseq(i));
+       %if not, pull it back to SO(n) using the projection and another exponential map
+       if ~ifStiefel
+           Z = A - A_previous;
+           prj_tg = self.projection_tangent(A_previous, Z);
+           A = A_previous * expm(prj_tg);
+       end
+   end
+   GD_SO_Lifting_Center = A;
+end
+
 
 function [Q, R] = Retraction_QR(self, X, V)
 %calculate the QR-decomposition type retraction Q = P_X(V) where X in St(p, n), V in T_X(St(p, n)) and Q in St(p, n)
@@ -182,8 +225,7 @@ end
 
 
 function [f, gradf] = Center_Mass_function_gradient_Euclid(self, Y)
-%calculate the function value and the gradient on Stiefel manifold St(p, n) of the Euclidean center of mass function 
-%f_F(A)=\sum_{k=1}^m w_k \|A-A_k\|_F^2
+%calculate the function value and the gradient on Stiefel manifold St(p, n) of the Euclidean center of mass function f_F(A)=\sum_{k=1}^m w_k \|A-A_k\|_F^2
     m = length(self.omega);
     f = 0;
     for i = 1:m
@@ -197,8 +239,7 @@ end
 
 
 function [Euclid_Center, value, gradnorm] = Center_Mass_Euclid(self)
-%directly calculate the Euclidean center of mass that is the St(p, n) minimizer of f_F(A)=\sum_{k=1}^m w_k\|A-A_k\|_F^2
-%according to our elegant lemma based on SVD
+%directly calculate the Euclidean center of mass that is the St(p, n) minimizer of f_F(A)=\sum_{k=1}^m w_k\|A-A_k\|_F^2, according to our elegant lemma based on SVD
     m = length(self.omega);
     n = size(self.Seq, 1);
     p = size(self.Seq, 2);
@@ -217,8 +258,7 @@ end
 
 
 function [GD_Euclid_Center, valueseq, gradnormseq, distanceseq] = Center_Mass_GD_Euclid(self, Y, iteration, lr, lrdecayrate)
-%gradient descent on Stiefel Manifolds
-%GD_Stiefel_Euclid can find the Euclidean Center of Mass via Gradient Descent on Stiefel Manifolds
+%find the Euclidean Center of Mass via Gradient Descent on Stiefel Manifolds
 %Given objective function f_F(A)=\sum_{k=1}^m \omega_k \|A-A_k\|_F^2 where A, A_k\in St(p, n)
 %Use Gradient Descent to find min_A f_F(A) 
     learning_rate = lr; 

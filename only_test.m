@@ -2,7 +2,7 @@ clearvars;
 clear classes;
 
 Seq(:, :, 1) = [0 1 0; 1 0 0; 0 0 0; 0 0 1];
-Seq(:, :, 2) = [1 0 0; 0 0 0; 0 1 0; 0 0 1];
+Seq(:, :, 2) = [1 0 0; 0 0 0; 0 -1 0; 0 0 -1];
 Seq(:, :, 3) = [1 0 0; 0 1 0; 0 0 0; 0 0 1];
 
 omega = [1 1 1];
@@ -20,18 +20,7 @@ threshold_logStiefel = 1e-10;
 StiefelOpt = Stiefel_Optimization(omega, Seq, threshold_gradnorm, threshold_fixedpoint, threshold_checkonStiefel, threshold_logStiefel);
 
 
-%control variables
 doQR_Retraction = 0;
-doQR_Lifting = 0;
-doQR_Retraction_Center = 0;
-doLogStiefel = 0;
-doEuclidGD = 0;
-doEuclidCenterDirect = 0;
-doCompleteSpecialOrthogonal = 0;
-doSOLiftingCenter = 1;
-
-
-
 if doQR_Retraction
     %compute the QR decomposition type retraction at X with tangent vector V
     X = Seq(:, :, 2);
@@ -44,7 +33,7 @@ if doQR_Retraction
 end
 
 
-
+doQR_Lifting = 0;
 if doQR_Lifting
     %compute the QR decomposition type lifting at X with respect to Q
     X = Seq(:, :, 3);
@@ -66,7 +55,7 @@ if doQR_Lifting
 end
 
 
-
+doQR_Retraction_Center = 0;
 if doQR_Retraction_Center
     %choose the Euclidean center of mass as initial frame to start the fixed point iteration
     [A, initvalue, initgradnorm] = StiefelOpt.Center_Mass_Euclid;
@@ -79,6 +68,7 @@ if doQR_Retraction_Center
 end
 
 
+doLogStiefel = 0;
 if doLogStiefel
     %compute exp_X(V_original)
     X = Seq(:, :, 2);
@@ -100,6 +90,7 @@ if doLogStiefel
 end    
 
 
+doEuclidGD = 0;
 if doEuclidGD
     %use GD to find Euclidean Stiefel center of mass
     tic;
@@ -119,6 +110,7 @@ if doEuclidGD
 end
 
 
+doEuclidCenterDirect = 0;
 if doEuclidCenterDirect
     %use direct method to find Euclidean Stiefel center of mass
     tic;
@@ -132,6 +124,8 @@ if doEuclidGD && doEuclidCenterDirect
     fprintf("GD minimizer to St(p, n)/SVD minimizer to St(p, n)=%f\n", norm(minf'*minf-eye(p), 'fro')/norm(minf2'*minf2-eye(p), 'fro'));
 end
 
+
+doCompleteSpecialOrthogonal = 0;
 if doCompleteSpecialOrthogonal
     %complete a given Stiefel matrix to special orthogonal
     %X = Seq(:, :, 2);
@@ -143,6 +137,8 @@ if doCompleteSpecialOrthogonal
     fprintf("ifStiefel = %d\n", StiefelOpt.CheckOnStiefel(Q));
 end
 
+
+doSOLiftingCenter = 0;
 if doSOLiftingCenter
     [minf2, minfvalue2, gradminfnorm2] = StiefelOpt.Center_Mass_Euclid;
     Q = StiefelOpt.Complete_SpecialOrthogonal(minf2);
@@ -150,4 +146,14 @@ if doSOLiftingCenter
     SOCenter = StiefelOpt.Center_Mass_SO_Lifting(Q, iteration);
     disp(SOCenter);
     fprintf("SO(n) lifting center of mass is given by the above matrix\n")
+end    
+
+
+doSOLiftingGD = 1;
+if doSOLiftingGD
+    [minf2, minfvalue2, gradminfnorm2] = StiefelOpt.Center_Mass_Euclid;
+    iteration = 1000;
+    lr = 0.000001;
+    lrdecayrate = 1;
+    [GD_SOCenter, gradnormseq] = StiefelOpt.Center_Mass_GD_SO_Lifting(minf2, iteration, lr, lrdecayrate);
 end    
