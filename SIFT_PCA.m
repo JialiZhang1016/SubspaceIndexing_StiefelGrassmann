@@ -2,17 +2,11 @@
 
 %author: Wenqing Hu (Missouri S&T)
 
-%Generate from SIFT data the local frames A_1, ..., A_{2^ht}
-%Find their center of mass A in Euclidean norm under weight w_k = exp(-d_k^2) where d_k is the SIFT distance to each cluster's centroid  
-%Test the PCA energy spectrum for SIFT projection on A
-
-%Finding the Euclidean Center of Mass for A_1, ..., A_{2^ht} under weights w_k via Gradient Descent on Stiefel Manifolds
-%Given objective function f_F(A)=\sum_{k=1}^{2^ht} \omega_k \|A-A_k\|_F^2 where A, A_k\in St(p, n)
-%Use Gradient Descent/Direct Method to find min_A f_F(A) 
-
-
 clearvars;
 clear classes;
+
+%Generate from SIFT data the local frames A_1, ..., A_{2^ht}
+%Find their center of mass A in Euclidean norm under weight w_k = exp(-d_k^2) where d_k is the SIFT distance to each cluster's centroid  
 
 %set the A_1,...,A_m on St(p, n) and the weight sequence, m=2^ht
 %the partition tree height
@@ -22,7 +16,7 @@ sample_size = 100 * 2^ht;
 %the PCA embedding dimension = kd_siftStiefel
 kd_siftStiefel = 16;
 %select the sift_sample in SIFT dataset that we will be working on
-%generate A_1,...,A_m and omega_1,...,omega_m
+%generate A_1,...,A_m and w_1,...,w_m
 [Seq, omega, sift_sample] = SIFT_PCA_traincluster(sample_size, kd_siftStiefel, ht);
 
 %all these frames are on St(n, p), actually n=128 and p=kd_siftStiefel
@@ -30,10 +24,12 @@ n = size(Seq, 1);
 p = size(Seq, 2);
 
 %Set the Stiefel Optimization object with given threshold parameters
-gradnormthreshold = 1e-4;
-checkonStiefelthreshold = 1e-10;
+threshold_gradnorm = 1e-4;
+threshold_fixedpoint = 1e-4;
+threshold_checkonStiefel = 1e-10;
+threshold_logStiefel = 1e-4;
 
-StiefelOpt = Stiefel_Optimization(omega, Seq, gradnormthreshold, checkonStiefelthreshold);
+StiefelOpt = Stiefel_Optimization(omega, Seq, threshold_gradnorm, threshold_fixedpoint, threshold_checkonStiefel, threshold_logStiefel);
 
 tic;
 %choose an initial frame to start the GD, randomly selected from A_1,...,A_m
@@ -45,15 +41,15 @@ A = Seq(:, :, init_label);
 iteration = 1000;
 lr = 0.01;
 lrdecayrate = 1;
-[fseq, gradfnormseq, distanceseq, minf1] = StiefelOpt.GD_Stiefel_Euclid(A, iteration, lr, lrdecayrate);
+[minf1, fseq, gradfnormseq, distanceseq] = StiefelOpt.Center_Mass_GD_Euclid(A, iteration, lr, lrdecayrate);
 toc;
 
 %use the direct Stiefel Euclidean center of mass method
 tic;
-[minfvalue2, gradminfnorm2, minf2] = StiefelOpt.CenterMass_Stiefel_Euclid;
+[minf2, minfvalue2, gradminfnorm2] = StiefelOpt.Center_Mass_Euclid;
 toc;
 
-doplotGD = 0; %plot the GD or the direct method
+doplotGD = 1; %plot the GD or the direct method
 
 if doplotGD
 
@@ -89,13 +85,13 @@ end
 
 %output the center of mass and check if it is still on Stiefel manifold
 disp(minf);
-[value, gradnorm] = StiefelOpt.gradientStiefel_Euclid(minf);
+[value, grad] = StiefelOpt.Center_Mass_function_gradient_Euclid(minf);
 fprintf("the center is given by the above matrix of size %d times %d\n", n, p);
-fprintf("the minimal value is given by %f, gradient norm is given by %f\n", value, gradnorm);
+fprintf("the minimal value is given by %f, gradient norm is given by %f10\n", value, norm(grad, 'fro'));
 [ifStiefel, distance] = StiefelOpt.CheckOnStiefel(minf);
 fprintf("if still on Stiefel= %d, distance to Stiefel= %f\n", ifStiefel, distance);
 
-%test the PCA spectrum of SIFT projection onto the eigenspace spanned by the center on St(p, n) that we found
+%Test the PCA spectrum of SIFT projection onto the eigenspace spanned by the center on St(p, n) that we found
 %do an initial PCA on sift_samples dataset
 [A0, s0, lat0] = pca(sift_sample);
   

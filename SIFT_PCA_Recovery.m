@@ -105,12 +105,12 @@ for test_index=1:test_size
     error_bm(test_index) = norm(x-x_hat);
     %Obtain the Euclidean center of mass A_c on St(p,n) for A_k1, ..., A_k{interpolation_number} under weights w_1, ..., w_{interpolation_number}
     %set the Stiefel Optimization object with given threshold parameters
-    gradnormthreshold = 1e-4;
-    fixedpointthreshold = 1e-4;
-    checkonStiefelthreshold = 1e-10;
-    LogStiefelthreshold = 1e-4;
+    threshold_gradnorm = 1e-4;
+    threshold_fixedpoint = 1e-4;
+    threshold_checkonStiefel = 1e-10;
+    threshold_logStiefel = 1e-4;
     %bulid the Stiefel Optimization Object
-    StiefelOpt = Stiefel_Optimization(w, frames, gradnormthreshold, fixedpointthreshold, checkonStiefelthreshold, LogStiefelthreshold);
+    StiefelOpt = Stiefel_Optimization(w, frames, threshold_gradnorm, threshold_fixedpoint, threshold_checkonStiefel, threshold_logStiefel);
     %find the center of mass A_c
     %compare several methods: Euclidean center of mass, direct or via GD, or Retraction-based center of mass
     if doEuclideanCenter
@@ -122,9 +122,9 @@ for test_index=1:test_size
             iteration = 1000;
             lr = 0.001;
             lrdecayrate = 1;
-            [fseq, gradfnormseq, distanceseq, A_c] = StiefelOpt.GD_Stiefel_Euclid(A, iteration, lr, lrdecayrate);
+            [A_c, gradfnormseq, distanceseq] = StiefelOpt.Center_Mass_GD_Euclid(A, iteration, lr, lrdecayrate);
         else
-            [minvalue, gradminfnorm, A_c] = StiefelOpt.CenterMass_Stiefel_Euclid;
+            [A_c, minvalue, gradminfnorm] = StiefelOpt.Center_Mass_Euclid;
         end
     else
         break;   

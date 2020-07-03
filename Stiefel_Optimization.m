@@ -9,10 +9,10 @@ classdef Stiefel_Optimization
 properties  
     omega %the weight sequence
     Seq   %the sequence of pointes on St(p, n)
-    gradnormthreshold   %the threshold for gradient norm when using GD
-    fixedpointthreshold %the threshold for fixed-point iteration for average
-    checkonStiefelthreshold  %the threshold for checking if iteration is still on St(p, n)
-    LogStiefelthreshold %the threshold for calculating the Stiefel logarithmic map
+    threshold_gradnorm   %the threshold for gradient norm when using GD
+    threshold_fixedpoint %the threshold for fixed-point iteration for average
+    threshold_checkonStiefel  %the threshold for checking if iteration is still on St(p, n)
+    threshold_logStiefel %the threshold for calculating the Stiefel logarithmic map via iterative method
 end  
 
    
@@ -20,14 +20,14 @@ end
 methods
     
 %class constructive function
-function self = Stiefel_Optimization(omega, Seq, gradnormthreshold, fixedpointthreshold, checkonStiefelthreshold, LogStiefelthreshold)           
+function self = Stiefel_Optimization(omega, Seq, threshold_gradnorm, threshold_fixedpoint, threshold_checkonStiefel, threshold_logStiefel)           
     if nargin > 0  
         self.omega = omega;  
         self.Seq = Seq;  
-        self.gradnormthreshold = gradnormthreshold;
-        self.fixedpointthreshold = fixedpointthreshold;
-        self.checkonStiefelthreshold = checkonStiefelthreshold;
-        self.LogStiefelthreshold = LogStiefelthreshold;
+        self.threshold_gradnorm = threshold_gradnorm;
+        self.threshold_fixedpoint = threshold_fixedpoint;
+        self.threshold_checkonStiefel = threshold_checkonStiefel;
+        self.threshold_logStiefel = threshold_logStiefel;
     end  
 end
 
@@ -109,7 +109,7 @@ end
 
 
 %using fixed-point iteration, calculate the QR-decomposition type retraction-based center of mass of A_k with weights w_k
-function [QR_Retraction_Center] = Center_Mass_Stiefel_QR_Retraction(self, Y, iteration)
+function [QR_Retraction_Center] = Center_Mass_QR_Retraction(self, Y, iteration)
     A = Y;
     m = length(self.omega);
     n = size(self.Seq, 1);
@@ -124,7 +124,7 @@ function [QR_Retraction_Center] = Center_Mass_Stiefel_QR_Retraction(self, Y, ite
         error = norm(A_new-A, 'fro');
         fprintf("iteration = %d, fixed point iteration error = %f\n", i, error);
         %disp(A_new);
-        if error < self.fixedpointthreshold
+        if error < self.threshold_fixedpoint
             break;
         end
         A = A_new;
@@ -140,7 +140,7 @@ end
 
 %calculate the function value and the gradient on Stiefel manifold St(p, n) of the Euclidean center of mass function 
 %f_F(A)=\sum_{k=1}^m w_k \|A-A_k\|_F^2
-function [f, gradf] = gradientStiefel_Euclid(self, Y)
+function [f, gradf] = Center_Mass_function_gradient_Euclid(self, Y)
     m = length(self.omega);
     f = 0;
     for i = 1:m
@@ -155,7 +155,7 @@ end
 
 %directly calculate the Euclidean center of mass that is the St(p, n) minimizer of f_F(A)=\sum_{k=1}^m w_k\|A-A_k\|_F^2
 %according to our elegant lemma based on SVD
-function [minvalue, gradminfnorm, minf] = CenterMass_Stiefel_Euclid(self)
+function [Euclid_Center, value, gradnorm] = Center_Mass_Euclid(self)
     m = length(self.omega);
     n = size(self.Seq, 1);
     p = size(self.Seq, 2);
@@ -167,9 +167,9 @@ function [minvalue, gradminfnorm, minf] = CenterMass_Stiefel_Euclid(self)
     O = zeros(p, n-p);
     Mtx = [eye(p) O];
     Mtx = Mtx';
-    minf = O1 * Mtx * O2';
-    [minvalue, gradminf] = self.gradientStiefel_Euclid(minf);
-    gradminfnorm = norm(gradminf, 'fro');
+    Euclid_Center = O1 * Mtx * O2';
+    [value, grad] = self.Center_Mass_function_gradient_Euclid(Euclid_Center);
+    gradnorm = norm(grad, 'fro');
 end
 
 
@@ -177,24 +177,26 @@ end
 %GD_Stiefel_Euclid can find the Euclidean Center of Mass via Gradient Descent on Stiefel Manifolds
 %Given objective function f_F(A)=\sum_{k=1}^m \omega_k \|A-A_k\|_F^2 where A, A_k\in St(p, n)
 %Use Gradient Descent to find min_A f_F(A) 
-function [fseq, gradfnormseq, distanceseq, minf] = GD_Stiefel_Euclid(self, Y, iteration, lr, lrdecayrate)
+function [GD_Euclid_Center, valueseq, gradnormseq, distanceseq] = Center_Mass_GD_Euclid(self, Y, iteration, lr, lrdecayrate)
     learning_rate = lr; 
-    fseq = zeros(iteration, 1);
-    gradfnormseq = zeros(iteration, 1);
+    valueseq = zeros(iteration, 1);
+    gradnormseq = zeros(iteration, 1);
     distanceseq = zeros(iteration, 1);
     A = Y;
     for i = 1:iteration
         %record the previous step
         A_previous = A;
         %calculate the function value and gradient on Stiefel
-        [f, gradf] = self.gradientStiefel_Euclid(A);
+        [f, gradf] = self.Center_Mass_function_gradient_Euclid(A);
+        %print the iteration value and gradient norm
+        fprintf("iteration %d, value= %f, gradnorm= %f\n", i, f, norm(gradf, 'fro'));
         %record the function value and gradient norm
-        fseq(i) = f;
-        gradfnormseq(i) = norm(gradf, 'fro');
+        valueseq(i) = f;
+        gradnormseq(i) = norm(gradf, 'fro');
         %if the gradient norm is smaller than 0.1 times the threshold value, stop iteration 
-        if norm(gradf, 'fro') < 0.1 * self.gradnormthreshold
+        if norm(gradf, 'fro') < 0.1 * self.threshold_gradnorm
             break;
-        elseif norm(gradf, 'fro') < self.gradnormthreshold
+        elseif norm(gradf, 'fro') < self.threshold_gradnorm
             %if the gradient norm is smaller than the threshold value, then decay the stepsize exponentially
             %we are able to tune the decay rate, and so far due to convexity it seems not decay is the best option
             learning_rate = learning_rate * lrdecayrate;
@@ -210,11 +212,9 @@ function [fseq, gradfnormseq, distanceseq, minf] = GD_Stiefel_Euclid(self, Y, it
             prj_tg = self.projection_tangent(A_previous, Z);
             [M, N, Q, A] = self.ExpStiefel(A_previous, prj_tg);
         end
-        %print the iteration value and gradient norm
-        fprintf("iteration %d, value= %f, gradnorm= %f\n", i, f, norm(gradf, 'fro'));
     end
     %obtain the center of mass
-    minf = A;
+    GD_Euclid_Center = A;
 end
 
      
@@ -225,7 +225,7 @@ function [ifStiefel, distance] = CheckOnStiefel(self, Y)
     p = size(Y, 2);
     Mtx = Y'*Y - eye(p);
     distance = norm(Mtx, 'fro');
-    if distance <= self.checkonStiefelthreshold
+    if distance <= self.threshold_checkonStiefel
         ifStiefel = true;
     else
         ifStiefel = false;
@@ -243,7 +243,7 @@ function [ifTangentStiefel] = CheckTangentStiefel(self, Y, H)
     if (n == n_H) && (p == p_H)
         Mtx = Y' * H + H' * Y;
         distance = norm(Mtx + Mtx', 'fro');
-        if distance <= self.checkonStiefelthreshold
+        if distance <= self.threshold_checkonStiefel
             ifTangentStiefel = true;
         else
             ifTangentStiefel = false;
@@ -297,7 +297,7 @@ function [A, B, Q, log] = LogStiefel(self, Y, Y_tilde, iteration)
         A = Log_Matrix(1:p, 1:p);
         B = Log_Matrix(p+1:2*p, 1:p);
         C = Log_Matrix(p+1:2*p, p+1:2*p);
-        if norm(C, 'fro') < self.LogStiefelthreshold
+        if norm(C, 'fro') < self.threshold_logStiefel
             break;
         end
         Phi = expm(-C);
