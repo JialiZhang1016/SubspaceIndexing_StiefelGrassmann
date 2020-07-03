@@ -4,7 +4,7 @@ a project by Wenqing Hu, Tiefeng Jiang and Li Zhu
 
 (1) Stiefel_Optimization.m 
 
-the object class for optimization calculus and differential geometry on Stiefel manifolds, such as tangent projection, exponential map, geodesics, gradient descent, retraction, logarithmic map, etc.
+the object class for optimization calculus and differential geometry on Stiefel manifolds, such as tangent projection, exponential map, geodesics, gradient descent, retraction, lifting, logarithmic map, etc.
 
 (2) buildVisualWordList.m
 
