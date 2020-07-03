@@ -25,8 +25,10 @@ doQR_Retraction = 0;
 doQR_Lifting = 0;
 doQR_Retraction_Center = 0;
 doLogStiefel = 0;
-doEuclidGD = 1;
-doEuclidCenterDirect = 1;
+doEuclidGD = 0;
+doEuclidCenterDirect = 0;
+doCompleteSpecialOrthogonal = 0;
+doSOLiftingCenter = 1;
 
 
 
@@ -130,5 +132,22 @@ if doEuclidGD && doEuclidCenterDirect
     fprintf("GD minimizer to St(p, n)/SVD minimizer to St(p, n)=%f\n", norm(minf'*minf-eye(p), 'fro')/norm(minf2'*minf2-eye(p), 'fro'));
 end
 
+if doCompleteSpecialOrthogonal
+    %complete a given Stiefel matrix to special orthogonal
+    %X = Seq(:, :, 2);
+    [minf2, minfvalue2, gradminfnorm2] = StiefelOpt.Center_Mass_Euclid;
+    X = minf2;
+    Q = StiefelOpt.Complete_SpecialOrthogonal(X);
+    disp(Q);
+    fprintf("the orthogonal matrix is given by the above matrix in SO(%d)\n", n);
+    fprintf("ifStiefel = %d\n", StiefelOpt.CheckOnStiefel(Q));
+end
 
-
+if doSOLiftingCenter
+    [minf2, minfvalue2, gradminfnorm2] = StiefelOpt.Center_Mass_Euclid;
+    Q = StiefelOpt.Complete_SpecialOrthogonal(minf2);
+    iteration = 1000;
+    SOCenter = StiefelOpt.Center_Mass_SO_Lifting(Q, iteration);
+    disp(SOCenter);
+    fprintf("SO(n) lifting center of mass is given by the above matrix\n")
+end    

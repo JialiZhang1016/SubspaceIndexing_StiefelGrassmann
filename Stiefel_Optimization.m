@@ -18,9 +18,10 @@ end
    
 %functions in the class
 methods
+
     
-%class constructive function
 function self = Stiefel_Optimization(omega, Seq, threshold_gradnorm, threshold_fixedpoint, threshold_checkonStiefel, threshold_logStiefel)           
+%class constructor function
     if nargin > 0  
         self.omega = omega;  
         self.Seq = Seq;  
@@ -32,8 +33,50 @@ function self = Stiefel_Optimization(omega, Seq, threshold_gradnorm, threshold_f
 end
 
 
-%calculate the QR-decomposition type retraction Q = P_X(V) where X in St(p, n), V in T_X(St(p, n)) and Q in St(p, n)
+function [Q] = Complete_SpecialOrthogonal(self, A)
+%given the matrix A in St(p, n), complete it into Q = [A_tilde B] in SO(n), where A_tilde in St(p, n) and column_span(A_tilde) = column_span(A)
+   n = size(self.Seq(:, :, 1), 1);
+   p = size(self.Seq(:, :, 1), 2);
+   B = [zeros(n-p, p); eye(p)];
+   Mtx = [A B];
+   [Q, R] = qr(Mtx);
+   if det(Q) < 0
+       Q(:, 1) = -Q(:, 1);
+   end
+end    
+
+
+function [SO_Lifting_Center] = Center_Mass_SO_Lifting(self, Q, iteration)
+%complete every St(p, n) matrix in Seq to SO(n) matrix, and average on SO(n) with respect to weights omega 
+   n = size(self.Seq(:, :, 1), 1); 
+   p = size(self.Seq(:, :, 1), 2);
+   m = length(self.omega);
+   SO_Seq = zeros(n, n, m);
+   for k = 1:m
+       SO_Seq(:, :, k) = self.Complete_SpecialOrthogonal(self.Seq(:, :, k));
+   end
+   SO_Lifting_Center = Q; %initial SO(n) matrix, can take indentity
+   for i = 1:iteration
+       Mtx = zeros(n, n);
+       for k = 1:m
+           Mtx = Mtx + self.omega(k) * logm(SO_Lifting_Center' * SO_Seq(:, :, k));
+       end
+       SO_Lifting_Center_old = SO_Lifting_Center;
+       SO_Lifting_Center = SO_Lifting_Center * expm(Mtx);
+       error = norm(SO_Lifting_Center - SO_Lifting_Center_old, 'fro');
+       fprintf("iteration = %d, fixed point error = %f\n", i, error);
+       %disp(exp(Mtx));
+       %disp(SO_Lifting_Center'*SO_Lifting_Center);
+       if error < self.threshold_fixedpoint
+           break;
+       end
+   end    
+end
+
+    
+
 function [Q, R] = Retraction_QR(self, X, V)
+%calculate the QR-decomposition type retraction Q = P_X(V) where X in St(p, n), V in T_X(St(p, n)) and Q in St(p, n)
     n_X = size(X, 1);
     p_X = size(X, 2);
     n_V = size(V, 1);
@@ -56,8 +99,8 @@ function [Q, R] = Retraction_QR(self, X, V)
 end
 
 
-%calculate the QR-decomposition type lifting V = P_X^{-1}(Q) where X in St(p, n), Q in St(p, n) and V in T_X(St(p, n))
 function [V, R] = Lifting_QR(self, X, Q)
+%calculate the QR-decomposition type lifting V = P_X^{-1}(Q) where X in St(p, n), Q in St(p, n) and V in T_X(St(p, n))
     n_X = size(X, 1);
     p_X = size(X, 2);
     n_Q = size(Q, 1);
@@ -108,8 +151,8 @@ function [V, R] = Lifting_QR(self, X, Q)
 end
 
 
-%using fixed-point iteration, calculate the QR-decomposition type retraction-based center of mass of A_k with weights w_k
 function [QR_Retraction_Center] = Center_Mass_QR_Retraction(self, Y, iteration)
+%using fixed-point iteration, calculate the QR-decomposition type retraction-based center of mass of A_k with weights w_k
     A = Y;
     m = length(self.omega);
     n = size(self.Seq, 1);
@@ -138,9 +181,9 @@ function [QR_Retraction_Center] = Center_Mass_QR_Retraction(self, Y, iteration)
 end
 
 
+function [f, gradf] = Center_Mass_function_gradient_Euclid(self, Y)
 %calculate the function value and the gradient on Stiefel manifold St(p, n) of the Euclidean center of mass function 
 %f_F(A)=\sum_{k=1}^m w_k \|A-A_k\|_F^2
-function [f, gradf] = Center_Mass_function_gradient_Euclid(self, Y)
     m = length(self.omega);
     f = 0;
     for i = 1:m
@@ -153,9 +196,9 @@ function [f, gradf] = Center_Mass_function_gradient_Euclid(self, Y)
 end
 
 
+function [Euclid_Center, value, gradnorm] = Center_Mass_Euclid(self)
 %directly calculate the Euclidean center of mass that is the St(p, n) minimizer of f_F(A)=\sum_{k=1}^m w_k\|A-A_k\|_F^2
 %according to our elegant lemma based on SVD
-function [Euclid_Center, value, gradnorm] = Center_Mass_Euclid(self)
     m = length(self.omega);
     n = size(self.Seq, 1);
     p = size(self.Seq, 2);
@@ -173,11 +216,11 @@ function [Euclid_Center, value, gradnorm] = Center_Mass_Euclid(self)
 end
 
 
+function [GD_Euclid_Center, valueseq, gradnormseq, distanceseq] = Center_Mass_GD_Euclid(self, Y, iteration, lr, lrdecayrate)
 %gradient descent on Stiefel Manifolds
 %GD_Stiefel_Euclid can find the Euclidean Center of Mass via Gradient Descent on Stiefel Manifolds
 %Given objective function f_F(A)=\sum_{k=1}^m \omega_k \|A-A_k\|_F^2 where A, A_k\in St(p, n)
 %Use Gradient Descent to find min_A f_F(A) 
-function [GD_Euclid_Center, valueseq, gradnormseq, distanceseq] = Center_Mass_GD_Euclid(self, Y, iteration, lr, lrdecayrate)
     learning_rate = lr; 
     valueseq = zeros(iteration, 1);
     gradnormseq = zeros(iteration, 1);
@@ -218,9 +261,9 @@ function [GD_Euclid_Center, valueseq, gradnormseq, distanceseq] = Center_Mass_GD
 end
 
      
+function [ifStiefel, distance] = CheckOnStiefel(self, Y)
 %test if the given matrix Y is on the Stiefel manifold St(p, n)
 %Y is the matrix to be tested, threshold is a threshold value, if \|Y^TY-I_p\|_F < threshold then return true
-function [ifStiefel, distance] = CheckOnStiefel(self, Y)
     n = size(Y, 1);
     p = size(Y, 2);
     Mtx = Y'*Y - eye(p);
@@ -233,9 +276,9 @@ function [ifStiefel, distance] = CheckOnStiefel(self, Y)
 end
         
 
+function [ifTangentStiefel] = CheckTangentStiefel(self, Y, H)
 %test if the given matrix H is on the tangent space of Stiefel manifold T_Y St(p, n)
 %H is the matrix to be tested, threshold is a threshold value, if \|Y^TH+H^TY\| < threshold then return true
-function [ifTangentStiefel] = CheckTangentStiefel(self, Y, H)
     n = size(Y, 1);
     p = size(Y, 2);
     n_H = size(H, 1);
@@ -254,10 +297,10 @@ function [ifTangentStiefel] = CheckTangentStiefel(self, Y, H)
 end
 
 
+function [M, N, Q, exp] = ExpStiefel(self, Y, H)
 %Exponential Map on Stiefel manifold St(p, n)
 %Y is the matrix on St(p, n) and H is the tangent vector
 %returns M, N, Q and based on them one can calculate exp_Y(H) = YM+QN
-function [M, N, Q, exp] = ExpStiefel(self, Y, H)
     n = size(Y, 1);
     p = size(Y, 2);
     W = (eye(n) - Y*Y') * H;
@@ -274,11 +317,12 @@ function [M, N, Q, exp] = ExpStiefel(self, Y, H)
     exp = Y * M + Q * N;
 end
 
+
+function [A, B, Q, log] = LogStiefel(self, Y, Y_tilde, iteration)
 %Logarithmic Map on Stiefel manifold St(p, n)
 %Y is the matrix on St(p, n) and Y_tilde is another matrix on St(p, n) close to Y
 %returns A, B, Q such that one can calculate log_Y(Y_tilde) = H = YA+QB
 %guarentees exp_Y(H) = Y_tilde with desired precision
-function [A, B, Q, log] = LogStiefel(self, Y, Y_tilde, iteration)
     n = size(Y, 1);
     p = size(Y, 2);
     M = Y' * Y_tilde;
@@ -308,10 +352,10 @@ function [A, B, Q, log] = LogStiefel(self, Y, Y_tilde, iteration)
 end    
 
 
+function [prj_tg] = projection_tangent(self, Y, Z)
 %calculate the projection onto tangent space of Stiefel manifold St(p, n)
 %Pi_{T, Y}(Z) projects matrix Z of size n by p onto the tangent space of St(p, n) at point Y\in St(p, n)
 %returns the tangent vector prj_tg on T_Y(St(p, n))
-function [prj_tg] = projection_tangent(self, Y, Z)
     n = size(Y, 1);
     p = size(Y, 2);
     skew = (Y' * Z - Z' * Y)/2;
