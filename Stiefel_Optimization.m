@@ -48,8 +48,8 @@ end
 
 function [SO_Lifting_Center] = Center_Mass_SO_Lifting(self, Q, iteration)
 %complete every St(p, n) matrix in Seq to SO(n) matrix, using fixed point iteration to average them on SO(n) with respect to weights w 
-   n = size(self.Seq(:, :, 1), 1); 
-   p = size(self.Seq(:, :, 1), 2);
+   n = size(Q, 1); 
+   p = size(Q, 2);
    m = length(self.omega);
    SO_Seq = zeros(n, n, m);
    for k = 1:m
@@ -87,12 +87,22 @@ function [GD_SO_Lifting_Center, gradnormseq, distanceseq] = Center_Mass_GD_SO_Li
        SO_Seq(:, :, k) = self.Complete_SpecialOrthogonal(self.Seq(:, :, k));
    end
    A = self.Complete_SpecialOrthogonal(Y);
+   A_correction_Seq = zeros(n, n, m);
    for i = 1:iteration
        Mtx = zeros(n, n);
        for k = 1:m
-           Mtx = Mtx + self.omega(k) * logm(A' * SO_Seq(:, :, k));
+           Q = A' * SO_Seq(:, :, k);
+           if ~self.CheckOnStiefel(Q)
+               fprintf("A'*SO_Seq(k) is not orthogonal!\n"); disp(A); disp(SO_Seq(:, :, k));
+               [Q, R] = qr(Q);
+           end
+           A_correction_Seq(:, :, k) = SO_Seq(:, :, k) * Q';
+           M = logm(Q);
+           M = 0.5 * M - 0.5 * M';
+           Mtx = Mtx + self.omega(k) * M;
        end
-       fprintf("det(A) = %f, det(SO_Seq) = %f\n", det(A), det(SO_Seq(:, :, k)));
+       A = mean(A_correction_Seq, 3);
+       [A, R] = qr(A);
        gradnorm = norm(Mtx, 'fro');
        gradnormseq(i) = gradnorm;
        if gradnorm < 0.1 * self.threshold_gradnorm   
@@ -106,12 +116,15 @@ function [GD_SO_Lifting_Center, gradnormseq, distanceseq] = Center_Mass_GD_SO_Li
        A = A * expm(- learning_rate * Mtx);
        %check if this A is still on SO(n)
        [ifStiefel, distanceseq(i)] = self.CheckOnStiefel(A);
-       fprintf("iteration = %d, gradient norm = %f, distance to SO = %f\n", i, gradnorm, distanceseq(i));
+       fprintf("iteration = %d, gradient norm = %f, distance to SO = %f, ifStiefel=%d \n", i, gradnorm, distanceseq(i), ifStiefel);
        %if not, pull it back to SO(n) using the projection and another exponential map
        if ~ifStiefel
            Z = A - A_previous;
-           prj_tg = self.projection_tangent(A_previous, Z);
+           prj_tg = self.projection_tangent(eye(n), A_previous' * Z);
+           fprintf("%d\n", self.CheckTangentStiefel(eye(n), prj_tg));
+           fprintf("%d\n", norm(diag(prj_tg'+prj_tg), 'fro'));
            A = A_previous * expm(prj_tg);
+           fprintf("%d\n", self.CheckOnStiefel(A));
        end
    end
    GD_SO_Lifting_Center = A;
@@ -198,8 +211,8 @@ function [QR_Retraction_Center] = Center_Mass_QR_Retraction(self, Y, iteration)
 %using fixed-point iteration, calculate the QR-decomposition type retraction-based center of mass of A_k with weights w_k
     A = Y;
     m = length(self.omega);
-    n = size(self.Seq, 1);
-    p = size(self.Seq, 2);
+    n = size(Y, 1);
+    p = size(Y, 2);
     V_new = zeros(n, p);
     for k = 1:m
         [V, R] = self.Lifting_QR(self.Seq(:, :, k), A);

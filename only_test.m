@@ -125,12 +125,12 @@ if doEuclidGD && doEuclidCenterDirect
 end
 
 
-doCompleteSpecialOrthogonal = 0;
+doCompleteSpecialOrthogonal = 1;
 if doCompleteSpecialOrthogonal
     %complete a given Stiefel matrix to special orthogonal
-    %X = Seq(:, :, 2);
-    [minf2, minfvalue2, gradminfnorm2] = StiefelOpt.Center_Mass_Euclid;
-    X = minf2;
+    X = Seq(:, :, 2);
+    %[minf2, minfvalue2, gradminfnorm2] = StiefelOpt.Center_Mass_Euclid;
+    %X = minf2;
     Q = StiefelOpt.Complete_SpecialOrthogonal(X);
     disp(Q);
     fprintf("the orthogonal matrix is given by the above matrix in SO(%d)\n", n);
@@ -149,11 +149,11 @@ if doSOLiftingCenter
 end    
 
 
-doSOLiftingGD = 1;
+doSOLiftingGD = 0;
 if doSOLiftingGD
     [minf2, minfvalue2, gradminfnorm2] = StiefelOpt.Center_Mass_Euclid;
-    iteration = 1000;
-    lr = 0.000001;
+    iteration = 10000;
+    lr = 0.001;
     lrdecayrate = 1;
     [GD_SOCenter, gradnormseq] = StiefelOpt.Center_Mass_GD_SO_Lifting(minf2, iteration, lr, lrdecayrate);
 end    
