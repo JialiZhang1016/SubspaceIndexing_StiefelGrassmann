@@ -1,9 +1,9 @@
 clearvars;
 clear classes;
 
-Seq(:, :, 1) = [0 1 0; 1 0 0; 0 0 0; 0 0 1];
-Seq(:, :, 2) = [1 0 0; 0 0 0; 0 -1 0; 0 0 -1];
-Seq(:, :, 3) = [1 0 0; 0 1 0; 0 0 0; 0 0 1];
+Seq(:, :, 1) = [0 1 0 0; 1 0 0 0; 0 0 0 0; 0 0 1 0; 0 0 0 1];
+Seq(:, :, 2) = [1 0 0 0; 0 0 0 0; 0 1 0 0; 0 0 1 0; 0 0 0 1];
+Seq(:, :, 3) = [1 0 0 0; 0 1 0 0; 0 0 0 0; 0 0 1 0; 0 0 0 1];
 
 omega = [1 1 1];
 
@@ -11,14 +11,24 @@ omega = [1 1 1];
 n = size(Seq, 1);
 p = size(Seq, 2);
 
-%Set the Stiefel Optimization object with given threshold parameters
+%Set the Stiefel and Grassmann Optimizations object with given threshold parameters
 threshold_gradnorm = 1e-7;
 threshold_fixedpoint = 1e-4;
 threshold_checkonStiefel = 1e-10;
 threshold_logStiefel = 1e-10;
+threshold_checkonGrassmann = 1e-10;
 
+
+%build the Stiefel and Grassmann Optimization objects
 StiefelOpt = Stiefel_Optimization(omega, Seq, threshold_gradnorm, threshold_fixedpoint, threshold_checkonStiefel, threshold_logStiefel);
+GrassmannOpt = Grassmann_Optimization(omega, Seq, threshold_gradnorm, threshold_fixedpoint, threshold_checkonGrassmann);
 
+
+
+
+doStiefel = 1;
+
+if doStiefel
 
 doQR_Retraction = 0;
 if doQR_Retraction
@@ -125,7 +135,7 @@ if doEuclidGD && doEuclidCenterDirect
 end
 
 
-doCompleteSpecialOrthogonal = 1;
+doCompleteSpecialOrthogonal = 0;
 if doCompleteSpecialOrthogonal
     %complete a given Stiefel matrix to special orthogonal
     X = Seq(:, :, 2);
@@ -141,11 +151,11 @@ end
 doSOLiftingCenter = 0;
 if doSOLiftingCenter
     [minf2, minfvalue2, gradminfnorm2] = StiefelOpt.Center_Mass_Euclid;
-    Q = StiefelOpt.Complete_SpecialOrthogonal(minf2);
     iteration = 1000;
-    SOCenter = StiefelOpt.Center_Mass_SO_Lifting(Q, iteration);
+    SOCenter = StiefelOpt.Center_Mass_SO_Lifting(minf2, iteration);
     disp(SOCenter);
-    fprintf("SO(n) lifting center of mass is given by the above matrix\n")
+    fprintf("SO(n) lifting center of mass is given by the above matrix\n\n")
+    disp(SOCenter' * SOCenter);
 end    
 
 
@@ -157,3 +167,78 @@ if doSOLiftingGD
     lrdecayrate = 1;
     [GD_SOCenter, gradnormseq] = StiefelOpt.Center_Mass_GD_SO_Lifting(minf2, iteration, lr, lrdecayrate);
 end    
+
+end %if doStiefel
+
+
+doGrassmann = 1;
+
+if doGrassmann
+
+doExpLog = 0;
+if doExpLog
+    Y = Seq(:, :, 2);
+    %Y_tilde = Seq(:, :, 1);
+    [Y_tilde, minfvalue2, gradminfnorm2] = StiefelOpt.Center_Mass_Euclid;
+    H = GrassmannOpt.projection_tangent(Y, Y_tilde);
+    fprintf("Y = \n"); disp(Y);    
+    fprintf("H = \n"); disp(H);
+    iftangentGrassmann = GrassmannOpt.CheckTangentGrassmann(Y, H);
+    fprintf("H is tangent to Grassmann at Y? %d\n", iftangentGrassmann);
+    exp = GrassmannOpt.ExpGrassmann(Y, H);
+    fprintf("exp_Y(H) = \n"); disp(exp);
+    log = GrassmannOpt.LogGrassmann(Y, exp);
+    fprintf("log_Y(exp_Y(H)) = \n"); disp(log);
+    
+    Y = Seq(:, :, 2);
+    [Y_tilde, minfvalue2, gradminfnorm2] = StiefelOpt.Center_Mass_Euclid;
+    fprintf("Y = \n"); disp(Y);    
+    fprintf("Y_tilde = \n"); disp(Y_tilde);
+    ifGrassmann = GrassmannOpt.CheckOnGrassmann(Y_tilde);
+    fprintf("Y_tilde is on Grassmann at Y? %d\n", ifGrassmann);
+    log = GrassmannOpt.LogGrassmann(Y, Y_tilde);
+    fprintf("log_Y(Y_tilde) = \n"); disp(log);
+    iftangentGrassmann = GrassmannOpt.CheckTangentGrassmann(Y, log);
+    fprintf("log_Y(Y_tilde) is tangent to Grassmann at Y? %d\n", iftangentGrassmann);
+    exp = GrassmannOpt.ExpGrassmann(Y, log);
+    fprintf("exp_Y(log_Y(Y_tilde)) = \n"); disp(exp);    
+    log = GrassmannOpt.LogGrassmann(Y, exp);
+    fprintf("log_Y(exp_Y(log_Y(Y_tilde))) = \n"); disp(log);
+    iftangentGrassmann = GrassmannOpt.CheckTangentGrassmann(Y, log);
+end
+
+
+doArcGD = 1;
+if doArcGD
+    %use GD to find Arc-distance Grassmann center of mass
+    tic;
+    A = StiefelOpt.Center_Mass_Euclid;
+    %Set the parameters for arc-GD on G_{n,p}
+    iteration = 1000;
+    lr = 0.01;
+    lrdecayrate = 1;
+    [center, gradnormseq, distanceseq] = GrassmannOpt.Center_Mass_GD_Arc(A, iteration, lr, lrdecayrate);
+    disp(center);
+    %fprintf("GD min value is %f, distance of GD minimizer to St(p, n) is %f20, if still on Stiefel is %d\n", StiefelOpt.Center_Mass_function_gradient_Euclid(minf), norm(minf'*minf-eye(p), 'fro'), StiefelOpt.CheckOnStiefel(minf));
+    toc;
+end
+
+doArcCenter = 0;
+if doArcCenter
+    %use GD to find Arc-distance Grassmann center of mass
+    tic;
+    %A = Seq(:, :, 2);
+    A = StiefelOpt.Center_Mass_Euclid;
+    %Set the parameters for arc-GD on G_{n,p}
+    iteration = 1000;
+    [center1, gradnormseq, errornormseq, valueseq, distanceseq] = GrassmannOpt.Center_Mass_Arc(A, iteration);
+    disp(center1);
+    disp(center*center');
+    disp(center1*center1');
+    %fprintf("GD min value is %f, distance of GD minimizer to St(p, n) is %f20, if still on Stiefel is %d\n", StiefelOpt.Center_Mass_function_gradient_Euclid(minf), norm(minf'*minf-eye(p), 'fro'), StiefelOpt.CheckOnStiefel(minf));
+    toc;
+end
+
+
+
+end %if doGrassmann

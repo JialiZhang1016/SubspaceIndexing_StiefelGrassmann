@@ -30,45 +30,112 @@ function self = Grassmann_Optimization(omega, Seq, threshold_gradnorm, threshold
     end  
 end
 
-function [GD_Arc_Center, gradnormseq, distanceseq] = Center_Mass_GD_Arc(self, Y, iteration, lr, lrdecayrate)
+
+function [value] = Center_Mass_function_Arc(self, Y)
+%find the value of the arc-distance center of mass function f(A)=\sum_{k=1}^m w_kd^2(A, A_k) where d is the arc-distance on G_{n,p}
+    A = Y;
+    m = length(self.omega);
+    n = size(A, 1);
+    p = size(A, 2);
+    value = 0;
+    for k = 1:m
+        %H = self.LogGrassmann(A, self.Seq(:,:,k));
+        %H = self.projection_tangent(A, H);
+        Mtx = Y' * self.Seq(:,:,k);
+        [O1, D, O2] = svd(Mtx);
+        add = sum(acos(diag(D)).^2);
+        value = value + self.omega(k) * add;
+        %value = value + self.omega(k) * (norm(H, 'fro')^2);
+    end
+end
+
+function [GD_Arc_Center, gradnormseq, errornormseq, valueseq, distanceseq] = Center_Mass_Arc(self, Y, iteration)
+%find the Arc-distance (natural geodesic distance) Center of Mass via Fixed-Point Iteration on Grassmann Manifolds
+    gradnormseq = zeros(iteration, 1);
+    errornormseq = zeros(iteration, 1);
+    distanceseq = zeros(iteration, 1);
+    valueseq = zeros(iteration, 1);
+    A = Y;
+    n = size(A, 1);
+    p = size(A, 2);
+    m = length(self.omega);
+    for i = 1:iteration
+        value = self.Center_Mass_function_Arc(A);
+        valueseq(i) = value;
+        A_previous = A;
+        grad = zeros(n, p);
+        for k = 1:m
+            grad = grad + self.omega(k) * self.LogGrassmann(A, self.Seq(:,:,k));
+        end
+        %grad_previous = grad;
+        %grad = self.projection_tangent(A, grad);
+        %disp(grad-grad_previous);
+        fprintf("iteration %d, value= %f, gradnorm= %f, ", i, value, norm(grad, 'fro'));
+        gradnormseq(i) = norm(grad, 'fro');
+        if norm(grad, 'fro') < 0.1 * self.threshold_gradnorm
+            break;
+        end
+        A = self.ExpGrassmann(A, grad);
+        %[O1, D, O2] = svd(A); O2 = [O2 zeros(p,n-p); zeros(n-p,p) eye(n-p)]; A = O1 * O2'; A = A(:, 1:p);
+        error = A*A'-A_previous*A_previous';
+        fprintf("A difference= %f, ", norm(error,'fro'));
+        errornormseq(i) = norm(error, 'fro');
+        %check if this A is still on Grassmann manifold
+        [ifGrassmann, distanceseq(i)] = self.CheckOnGrassmann(A);
+        fprintf("ifGrassmann= %d, distance= %d \n", ifGrassmann, distanceseq(i));
+        %if not, pull it back to Grassmann manifold using the projection and another exponential map
+        %if ~ifGrassmann
+        %    Z = A - A_previous;
+        %    prj_tg = self.projection_tangent(A_previous, Z);
+        %    A = self.ExpGrassmann(A_previous, prj_tg);
+        %end
+    end
+    GD_Arc_Center = A;
+end
+
+
+function [GD_Arc_Center, gradnormseq, valueseq, distanceseq] = Center_Mass_GD_Arc(self, Y, iteration, lr, lrdecayrate)
 %find the Arc-distance (natural geodesic distance) Center of Mass via Gradient Descent on Grassmann Manifolds
 %Given objective function f(A)=\sum_{k=1}^m \omega_k d^2_{G_{n,p}}(A, A_k) where A, A_k\in St(p, n)
 %Use Gradient Descent to find min_A f_F(A) 
     learning_rate = lr; 
     gradnormseq = zeros(iteration, 1);
     distanceseq = zeros(iteration, 1);
+    valueseq = zeros(iteration, 1);
     A = Y;
+    n = size(A, 1);
+    p = size(A, 2);
+    m = length(self.omega);
     for i = 1:iteration
-        %record the previous step
         A_previous = A;
-        %calculate the function value and gradient on Stiefel
-        gradf = self.Center_Mass_function_gradient_Euclid(A);
-        %print the iteration value and gradient norm
-        fprintf("iteration %d, gradnorm= %f\n", i, norm(gradf, 'fro'));
-        %record the function value and gradient norm
-        gradnormseq(i) = norm(gradf, 'fro');
-        %if the gradient norm is smaller than 0.1 times the threshold value, stop iteration 
-        if norm(gradf, 'fro') < 0.1 * self.threshold_gradnorm
+        grad = zeros(n, p);
+        value = self.Center_Mass_function_Arc(A);
+        valueseq(i) = value;
+        for k = 1:m
+            grad = grad + self.omega(k) * self.LogGrassmann(A, self.Seq(:,:,k));
+        end
+        grad = self.projection_tangent(A, grad);
+        fprintf("iteration %d, value= %f, gradnorm= %f, ", i, value, norm(grad, 'fro'));
+        gradnormseq(i) = norm(grad, 'fro');
+        if norm(grad, 'fro') < 0.1 * self.threshold_gradnorm
             break;
-        elseif norm(gradf, 'fro') < self.threshold_gradnorm
-            %if the gradient norm is smaller than the threshold value, then decay the stepsize exponentially
-            %we are able to tune the decay rate, and so far due to convexity it seems not decay is the best option
+        elseif norm(grad, 'fro') < self.threshold_gradnorm
             learning_rate = learning_rate * lrdecayrate;
         end
-        %gradient descent on Stiefel, obtain the new step A
-        H = learning_rate * (-1) * gradf;
-        [M, N, Q, A] = self.ExpStiefel(A, H);      
-        %check if this A is still on Stiefel manifold
-        [ifStiefel, distanceseq(i)] = self.CheckOnStiefel(A);
-        %if not, pull it back to Stiefel manifold using the projection and another exponential map
-        if ~ifStiefel
+        A = self.ExpGrassmann(A, -learning_rate * grad);
+        %[O1, D, O2] = svd(A); O2 = [O2 zeros(p,n-p); zeros(n-p,p) eye(n-p)]; A = O1 * O2'; A = A(:, 1:p);
+        fprintf("A difference= %f, ", norm(A*A'-A_previous*A_previous','fro'));
+        %check if this A is still on Grassmann manifold
+        [ifGrassmann, distanceseq(i)] = self.CheckOnGrassmann(A);
+        fprintf("ifGrassmann= %d \n", ifGrassmann);
+        %if not, pull it back to Grassmann manifold using the projection and another exponential map
+        if ~ifGrassmann
             Z = A - A_previous;
             prj_tg = self.projection_tangent(A_previous, Z);
-            [M, N, Q, A] = self.ExpStiefel(A_previous, prj_tg);
+            A = self.ExpGrassmann(A_previous, prj_tg);
         end
     end
-    %obtain the center of mass
-    GD_Euclid_Center = A;
+    GD_Arc_Center = A;
 end
 
      
@@ -109,7 +176,7 @@ function [ifTangentGrassmann, distance] = CheckTangentGrassmann(self, Y, H)
 end
 
 
-function [U, S, V, exp] = ExpGrassmann(self, Y, H)
+function [exp, U, S, V] = ExpGrassmann(self, Y, H)
 %Exponential Map on Grassmann manifold G_{n,p}
 %Y is the matrix on St(p,n) and H is the tangent vector to G_{n,p}, which is an n times p matrix
 %returns the svd decomposition H = U S V^T and based on them one can calculate exp_Y(H) = YVcos(S)+Usin(S)
@@ -124,20 +191,25 @@ function [U, S, V, exp] = ExpGrassmann(self, Y, H)
 end
 
 
-function [U, G, V, log] = LogGrassmann(self, Y, Y_tilde)
+function [log, U, G, V] = LogGrassmann(self, Y, Y_tilde)
 %Logarithmic Map on Grassmann manifold G_{n,p}
 %Y is the matrix on St(p,n) and Y_tilde is another matrix on St(p,n), both correspond to some points on G_{n,p} 
 %returns U, G, V such that one can calculate log_Y(Y_tilde) = H = U (tan^{-1}(G)) V^T
     n = size(Y, 1);
     p = size(Y, 2);
     M = Y' * Y_tilde;
-    if det(M) > 0
+    if det(M)~=0 
         Mtx = (eye(n) - Y * Y') * Y_tilde * inv(M);
         [U, G, V] = svd(Mtx);
         U = U(:, 1:p);
         G = G(1:p, :);
         taninvG = diag(atan(diag(G)));
         log = U * taninvG * V';
+        log = self.projection_tangent(Y, log);
+        %exp = self.ExpGrassmann(Y, log);
+        %if norm(Y_tilde*Y_tilde'-exp*exp', 'fro') ~= 0
+        %    fprintf("log has error %f in accuracy!\n", norm(Y_tilde*Y_tilde'-exp*exp', 'fro'));
+        %end    
     else
         fprintf("Error LogGrassmann: Y'*Y_tilde not invertible!\n")
         fprintf("Y = \n"); disp(Y);

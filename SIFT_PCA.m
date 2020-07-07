@@ -28,8 +28,12 @@ threshold_gradnorm = 1e-4;
 threshold_fixedpoint = 1e-4;
 threshold_checkonStiefel = 1e-10;
 threshold_logStiefel = 1e-4;
+threshold_checkonGrassmann = 1e-10;
 
 StiefelOpt = Stiefel_Optimization(omega, Seq, threshold_gradnorm, threshold_fixedpoint, threshold_checkonStiefel, threshold_logStiefel);
+
+GrassmannOpt = Grassmann_Optimization(omega, Seq, threshold_gradnorm, threshold_fixedpoint, threshold_checkonGrassmann);
+
 
 tic;
 %choose an initial frame to start the GD, randomly selected from A_1,...,A_m
@@ -37,6 +41,7 @@ tic;
 m = length(Seq);
 init_label = randi(m);
 A = Seq(:, :, init_label);
+
 %Set the parameters for GD on Stiefel St(p, n)
 iteration = 1000;
 lr = 0.01;
@@ -81,6 +86,14 @@ else
     
     minf = minf2;
     
+end
+
+doGrassmann = 1;
+if doGrassmann
+    iteration = 1000;
+    [center, gradnormseq, errornormseq, valueseq, distanceseq] = GrassmannOpt.Center_Mass_Arc(A, iteration);
+    disp(center);
+    toc;
 end
 
 %output the center of mass and check if it is still on Stiefel manifold
