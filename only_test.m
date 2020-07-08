@@ -208,7 +208,7 @@ if doExpLog
 end
 
 
-doArcGD = 1;
+doArcGD = 0;
 if doArcGD
     %use GD to find Arc-distance Grassmann center of mass
     tic;
@@ -239,6 +239,13 @@ if doArcCenter
     toc;
 end
 
+dopFCenter = 1;
+if dopFCenter
+    %directly find the projection Frobenius center of mass
+    tic;
+    [pfCenter, value, grad] = GrassmannOpt.Center_Mass_pFrobenius;
+    disp(pfCenter);
+end
 
 
 end %if doGrassmann

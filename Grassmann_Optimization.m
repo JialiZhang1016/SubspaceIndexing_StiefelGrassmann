@@ -31,8 +31,45 @@ function self = Grassmann_Optimization(omega, Seq, threshold_gradnorm, threshold
 end
 
 
-function [value] = Center_Mass_function_Arc(self, Y)
-%find the value of the arc-distance center of mass function f(A)=\sum_{k=1}^m w_kd^2(A, A_k) where d is the arc-distance on G_{n,p}
+function [value, grad] = Center_Mass_function_gradient_pFrobenius(self, Y)
+%find the value and grad of the projected Frobenius distance center of mass function f(A)=\sum_{k=1}^m w_k |AA^T-A_kA_k^T|_F^2 on G_{n,p}
+    A = Y;
+    m = length(self.omega);
+    n = size(A, 1);
+    p = size(A, 2);
+    value = 0;
+    for k = 1:m
+        Mtx = A * A' - self.Seq(:,:,k) * self.Seq(:,:,k)';
+        value = value + self.omega(k) * (norm(Mtx, 'fro')^2);
+    end
+    grad = zeros(n, p);
+    for k = 1:m
+        M1 = A .* (2 * self.omega(k));
+        M2 = self.Seq(:,:,k) * self.Seq(:,:,k)' * A .* (4 * self.omega(k));
+        grad = grad + M1 - M2;
+    end
+end    
+
+
+function [pF_Center, value, grad] = Center_Mass_pFrobenius(self)
+%directly calculate the center of mass on G_{n,p} with respect to projected Frobenius norm
+    m  = length(self.omega);
+    n = size(self.Seq, 1);
+    p = size(self.Seq, 2);
+    total_weight = sum(self.omega);
+    Mtx = zeros(n, n);
+    for k = 1:m
+        Mtx = Mtx + (self.Seq(:,:,k) * self.Seq(:,:,k)').*(self.omega(k)/total_weight);
+    end
+    [Q, D, Q1] = svd(Mtx);
+    I = [diag(ones(p, 1)); zeros(n-p, p)];
+    pF_Center = Q * I;
+    [value, grad] = self.Center_Mass_function_gradient_pFrobenius(pF_Center);
+end
+
+
+function [value, grad] = Center_Mass_function_gradient_Arc(self, Y)
+%find the value and grad of the arc-distance center of mass function f(A)=\sum_{k=1}^m w_kd^2(A, A_k) where d is the arc-distance on G_{n,p}
     A = Y;
     m = length(self.omega);
     n = size(A, 1);
@@ -47,9 +84,15 @@ function [value] = Center_Mass_function_Arc(self, Y)
         value = value + self.omega(k) * add;
         %value = value + self.omega(k) * (norm(H, 'fro')^2);
     end
+    grad = zeros(n, p);
+    for k = 1:m
+        grad = grad + self.omega(k) * self.LogGrassmann(A, self.Seq(:,:,k));
+    end 
+    grad = self.projection_tangent(A, grad);
 end
 
-function [GD_Arc_Center, gradnormseq, errornormseq, valueseq, distanceseq] = Center_Mass_Arc(self, Y, iteration)
+
+function [Arc_Center, gradnormseq, errornormseq, valueseq, distanceseq] = Center_Mass_Arc(self, Y, iteration)
 %find the Arc-distance (natural geodesic distance) Center of Mass via Fixed-Point Iteration on Grassmann Manifolds
     gradnormseq = zeros(iteration, 1);
     errornormseq = zeros(iteration, 1);
@@ -60,7 +103,7 @@ function [GD_Arc_Center, gradnormseq, errornormseq, valueseq, distanceseq] = Cen
     p = size(A, 2);
     m = length(self.omega);
     for i = 1:iteration
-        value = self.Center_Mass_function_Arc(A);
+        value = self.Center_Mass_function_gradient_Arc(A);
         valueseq(i) = value;
         A_previous = A;
         grad = zeros(n, p);
@@ -90,7 +133,7 @@ function [GD_Arc_Center, gradnormseq, errornormseq, valueseq, distanceseq] = Cen
         %    A = self.ExpGrassmann(A_previous, prj_tg);
         %end
     end
-    GD_Arc_Center = A;
+    Arc_Center = A;
 end
 
 
@@ -109,7 +152,7 @@ function [GD_Arc_Center, gradnormseq, valueseq, distanceseq] = Center_Mass_GD_Ar
     for i = 1:iteration
         A_previous = A;
         grad = zeros(n, p);
-        value = self.Center_Mass_function_Arc(A);
+        value = self.Center_Mass_function_gradient_Arc(A);
         valueseq(i) = value;
         for k = 1:m
             grad = grad + self.omega(k) * self.LogGrassmann(A, self.Seq(:,:,k));
