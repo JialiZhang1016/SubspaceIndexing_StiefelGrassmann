@@ -48,6 +48,7 @@ function [value, grad] = Center_Mass_function_gradient_pFrobenius(self, Y)
         M2 = self.Seq(:,:,k) * self.Seq(:,:,k)' * A .* (4 * self.omega(k));
         grad = grad + M1 - M2;
     end
+    grad = grad - A * A' * grad;
 end    
 
 
