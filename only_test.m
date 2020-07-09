@@ -4,8 +4,15 @@ clear classes;
 Seq(:, :, 1) = [0 1 0 0; 1 0 0 0; 0 0 0 0; 0 0 1 0; 0 0 0 1];
 Seq(:, :, 2) = [1 0 0 0; 0 0 0 0; 0 1 0 0; 0 0 1 0; 0 0 0 1];
 Seq(:, :, 3) = [1 0 0 0; 0 1 0 0; 0 0 0 0; 0 0 1 0; 0 0 0 1];
-
 omega = [1 1 1];
+
+
+
+%Seq(:, :, 1) = [1; 0];
+%Seq(:, :, 2) = [0; 1];
+%omega = [1 1];
+
+
 
 %all these frames are on St(n, p), actually n=128 and p=kd_siftStiefel
 n = size(Seq, 1);
@@ -217,7 +224,7 @@ if doArcGD
     iteration = 1000;
     lr = 0.01;
     lrdecayrate = 1;
-    [center, gradnormseq, distanceseq] = GrassmannOpt.Center_Mass_GD_Arc(A, iteration, lr, lrdecayrate);
+    [center, valueseq, gradnormseq, distanceseq] = GrassmannOpt.Center_Mass_GD_Arc(A, iteration, lr, lrdecayrate);
     disp(center);
     %fprintf("GD min value is %f, distance of GD minimizer to St(p, n) is %f20, if still on Stiefel is %d\n", StiefelOpt.Center_Mass_function_gradient_Euclid(minf), norm(minf'*minf-eye(p), 'fro'), StiefelOpt.CheckOnStiefel(minf));
     toc;
@@ -231,7 +238,7 @@ if doArcCenter
     A = StiefelOpt.Center_Mass_Euclid;
     %Set the parameters for arc-GD on G_{n,p}
     iteration = 1000;
-    [center1, gradnormseq, errornormseq, valueseq, distanceseq] = GrassmannOpt.Center_Mass_Arc(A, iteration);
+    [center1, valueseq, gradnormseq, distanceseq, errornormseq] = GrassmannOpt.Center_Mass_Arc(A, iteration);
     disp(center1);
     disp(center*center');
     disp(center1*center1');
@@ -239,12 +246,35 @@ if doArcCenter
     toc;
 end
 
-dopFCenter = 1;
+dopFCenter = 0;
 if dopFCenter
     %directly find the projection Frobenius center of mass
     tic;
     [pfCenter, value, grad] = GrassmannOpt.Center_Mass_pFrobenius;
     disp(pfCenter);
+end
+
+dopFGD = 1;
+if dopFGD
+    %use GD to find projected Euclid center of mass
+    tic;
+    %choose an initial frame to start the GD, randomly selected from A_1,...,A_m
+    %rng(1, 'twister');
+    %m = length(Seq);
+    init_label = 1;
+    A = Seq(:, :, init_label);
+    %A = StiefelOpt.Center_Mass_Euclid;
+    [value, grad] = GrassmannOpt.Center_Mass_function_gradient_pFrobenius(A);
+    %A = [0.9856 -0.1691; 0.1196 0.6969; 0.1196 0.6969];
+    %Set the parameters for GD on G_{n,p}
+    iteration = 1000;
+    lr = 0.01;
+    lrdecayrate = 1;
+    [minf, fseq, gradfnormseq, distanceseq] = GrassmannOpt.Center_Mass_GD_pFrobenius(A, iteration, lr, lrdecayrate);
+    [value, grad] = GrassmannOpt.Center_Mass_function_gradient_pFrobenius(minf);
+    [ifGrassmann, distance] = GrassmannOpt.CheckOnGrassmann(minf);
+    fprintf("GD min value is %f, distance of GD minimizer to St(p, n) is %f20, if still on Grassmann is %d\n", value, distance, ifGrassmann);
+    toc;
 end
 
 

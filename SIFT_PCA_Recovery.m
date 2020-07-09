@@ -211,7 +211,7 @@ function [sift_train, Seq, leafs, sift_test] = SIFT_PCA_train(kd_siftStiefel, tr
 %        sifts: [10068850×128 uint8]
 %    sift_offs: [1×33590 double]
 
-load ~/文档/work_SubspaceIndexingStiefleGrassmann/Code_Subspace_indexing_Stiefel_Grassman/cdvs-sift300-dataset.mat sifts
+load ~/文档/work_SubspaceIndexingStiefleGrassmann/Code_Subspace_indexing_Stiefel_Grassman/DATA_cdvs-sift300-dataset.mat sifts
 
 %n_sift=10068850 is the number of samples in sifts dataset, kd_sift is the original dimension of each sample
 %kd_sift=128

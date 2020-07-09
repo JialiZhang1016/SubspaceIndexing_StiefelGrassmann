@@ -69,6 +69,43 @@ function [pF_Center, value, grad] = Center_Mass_pFrobenius(self)
 end
 
 
+function [GD_pF_Center, valueseq, gradnormseq, distanceseq] = Center_Mass_GD_pFrobenius(self, Y, iteration, lr, lrdecayrate)
+%find the projected Frobenius distance Center of Mass via Gradient Descent on Grassmann Manifolds
+%Given objective function f(A)=\sum_{k=1}^m \omega_k |AA^T-A_kA_k^T|_F^2 where A, A_k\in St(p, n)
+%Use Gradient Descent to find min_A f_F(A) 
+    learning_rate = lr; 
+    distanceseq = zeros(iteration, 1);
+    gradnormseq = zeros(iteration, 1);
+    valueseq = zeros(iteration, 1);
+    A = Y;
+    n = size(A, 1);
+    p = size(A, 2);
+    m = length(self.omega);
+    for i = 1:iteration
+        [value, grad] = self.Center_Mass_function_gradient_pFrobenius(A);
+        gradnormseq(i) = norm(grad, 'fro');
+        valueseq(i) = value;
+        if norm(grad, 'fro') < 0.1 * self.threshold_gradnorm
+            break;
+        elseif norm(grad, 'fro') < self.threshold_gradnorm
+            learning_rate = learning_rate * lrdecayrate;
+        end
+        A_previous = A;
+        A = self.ExpGrassmann(A, -learning_rate * grad);
+        %check if this A is still on Grassmann manifold
+        [ifGrassmann, distanceseq(i)] = self.CheckOnGrassmann(A);
+        fprintf("iteration %d, value= %f, gradnorm= %f, ifGrassmann= %d\n", i, value, norm(grad, 'fro'), ifGrassmann);
+        %if not, pull it back to Grassmann manifold using the projection and another exponential map
+        if ~ifGrassmann
+            Z = A - A_previous;
+            prj_tg = self.projection_tangent(A_previous, Z);
+            A = self.ExpGrassmann(A_previous, prj_tg);
+        end
+    end
+    GD_pF_Center = A;
+end
+
+
 function [value, grad] = Center_Mass_function_gradient_Arc(self, Y)
 %find the value and grad of the arc-distance center of mass function f(A)=\sum_{k=1}^m w_kd^2(A, A_k) where d is the arc-distance on G_{n,p}
     A = Y;
@@ -93,12 +130,12 @@ function [value, grad] = Center_Mass_function_gradient_Arc(self, Y)
 end
 
 
-function [Arc_Center, gradnormseq, errornormseq, valueseq, distanceseq] = Center_Mass_Arc(self, Y, iteration)
+function [Arc_Center, valueseq, gradnormseq, distanceseq, errornormseq] = Center_Mass_Arc(self, Y, iteration)
 %find the Arc-distance (natural geodesic distance) Center of Mass via Fixed-Point Iteration on Grassmann Manifolds
-    gradnormseq = zeros(iteration, 1);
-    errornormseq = zeros(iteration, 1);
-    distanceseq = zeros(iteration, 1);
     valueseq = zeros(iteration, 1);
+    gradnormseq = zeros(iteration, 1);
+    distanceseq = zeros(iteration, 1);
+    errornormseq = zeros(iteration, 1);
     A = Y;
     n = size(A, 1);
     p = size(A, 2);
@@ -138,14 +175,14 @@ function [Arc_Center, gradnormseq, errornormseq, valueseq, distanceseq] = Center
 end
 
 
-function [GD_Arc_Center, gradnormseq, valueseq, distanceseq] = Center_Mass_GD_Arc(self, Y, iteration, lr, lrdecayrate)
+function [GD_Arc_Center, valueseq, gradnormseq, distanceseq] = Center_Mass_GD_Arc(self, Y, iteration, lr, lrdecayrate)
 %find the Arc-distance (natural geodesic distance) Center of Mass via Gradient Descent on Grassmann Manifolds
 %Given objective function f(A)=\sum_{k=1}^m \omega_k d^2_{G_{n,p}}(A, A_k) where A, A_k\in St(p, n)
 %Use Gradient Descent to find min_A f_F(A) 
     learning_rate = lr; 
+    valueseq = zeros(iteration, 1);
     gradnormseq = zeros(iteration, 1);
     distanceseq = zeros(iteration, 1);
-    valueseq = zeros(iteration, 1);
     A = Y;
     n = size(A, 1);
     p = size(A, 2);
