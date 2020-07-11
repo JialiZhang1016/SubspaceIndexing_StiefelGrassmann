@@ -21,3 +21,7 @@ do the SIFT (Scale Invariant Feature Transform) PCA analysis
 (5) SIFT_PCA_Recovery.m
 
 do the SIFT PCA recovery using the Stiefel_Optimization method, compare with benchmark nearest neighbor method
+
+(6) NWPU_LPP.m
+
+classfication analysis based on Laplacian eigenface and graph Laplacian method, as well as center of mass on Grassmann manifold
