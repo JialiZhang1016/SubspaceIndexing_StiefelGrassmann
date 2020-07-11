@@ -24,4 +24,4 @@ do the SIFT PCA recovery using the Stiefel_Optimization method, compare with ben
 
 (6) NWPU_LPP.m
 
-classfication analysis based on Laplacian eigenface and graph Laplacian method, as well as center of mass on Grassmann manifold
+classfication analysis on nwpu-aerial-images dataset based on Laplacian eigenface and graph Laplacian method, as well as center of mass on Grassmann manifold
