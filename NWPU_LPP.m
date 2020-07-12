@@ -12,9 +12,9 @@ kd_nwpuPCA = 64;
 %the LPP embedding dimension = kd_nwpuLPP
 kd_nwpuLPP = 16;
 %train_size = the nwpu training data size
-train_size = 20*2^10;
+train_size = 15*2^11;
 %ht = the partition tree height
-ht = 10;
+ht = 11;
 %test_size = the nwpu test data size
 test_size = 100;
 
@@ -23,7 +23,7 @@ interpolation_number_seq = ones(test_size, 1);
 ratio_threshold = 1.001;
 
 %obtain the train, test sets in nwpu and the LPP frames Seq(:,:,k) for each cluster with indexes in leafs
-[nwpu_train, nwpu_train_LPPembedding, Seq, leafs, nwpu_test] = NWPU_LPP_train(kd_nwpuLPP, kd_nwpuPCA, train_size, ht, test_size);
+[nwpu_train, Seq, leafs, nwpu_test] = NWPU_LPP_train(kd_nwpuLPP, kd_nwpuPCA, train_size, ht, test_size);
 
 
 %all these LPP Stiefel frames are on St(n, p), actually n=4096 and p=kd_nwpuLPP
@@ -39,14 +39,14 @@ for k=1:2^ht
     m(:, k) = mean(nwpu_train.x(leafs{k}, :), 1);
 end
 
-counter_success = 0; %counting the number of times when classification via interpolation is more efficient
 K = 1e-8; %the scaling coefficient for calculating the weights w = e^{-K distance^2}
-k_nearest_neighbor = 100; %the parameter k for k-nearest-neighbor classification
+k_nearest_neighbor = 15; %the parameter k for k-nearest-neighbor classification
 
 classified_bm = zeros(test_size, 1); %list of classified/not classified projections for using the nearest frame, benchmark
 classified_c = zeros(test_size, 1);  %list of classified/not classified projections for using the Grassmann center method
 
-dopFCenter = 1; %do or do not do projected Frobenius center of mass
+doGrassmannpFCenter = 1; %do or do not do projected Frobenius center of mass for Grassmannian frame
+doStiefelEuclidCenter = 0; %do or do not do Euclid center of mass for Stiefel frame 
 doGD = 0; %do or do not do GD for finding projected Frobenius center of mass
 
 tic;
@@ -83,29 +83,55 @@ for test_index=1:test_size
     for i=1:interpolation_number
         w(i) = exp(- K * (dist_sort(i))^2);
     end
-    %project x to A1 x and classify it using k-nearest-neighbor on nwpu_train_LPPembedding 
-    isclassified_bm = knn(x*frames(:,:,1), y, nwpu_train_LPPembedding.x, nwpu_train_LPPembedding.y, k_nearest_neighbor);
+    %collect all indexes in clusters corresponding to the first (interpolation_number) closest clusters to x
+    aggregate_cluster = [];
+    for i=1:interpolation_number
+        aggregate_cluster = union(aggregate_cluster, leafs{indexes(i)});
+    end
+    %project x to A1 x and classify it using k-nearest-neighbor on the projection via A1 of the closest cluster
+    x_test = x * frames(:,:,1);
+    y_test = y;
+    X_train = nwpu_train.x(leafs{indexes(1)}, :) * frames(:,:,1);
+    Y_train = nwpu_train.y(leafs{indexes(1)});
+    isclassified_bm = knn(x_test, y_test, X_train, Y_train, k_nearest_neighbor);
     classified_bm(test_index) = isclassified_bm;
     %calculate the center of mass for the (interpolation_number) nearest cluster LPP frames with respect to weights w 
     threshold_gradnorm = 1e-4;
     threshold_fixedpoint = 1e-4;
     threshold_checkonGrassmann = 1e-10;
+    threshold_checkonStiefel = 1e-10;
+    threshold_logStiefel = 1e-4;
     GrassmannOpt = Grassmann_Optimization(w, frames, threshold_gradnorm, threshold_fixedpoint, threshold_checkonGrassmann);
-    if dopFCenter
+    StiefelOpt = Stiefel_Optimization(w, frames, threshold_gradnorm, threshold_fixedpoint, threshold_checkonStiefel, threshold_logStiefel);
+    if doGrassmannpFCenter
         if doGD
             break;
         else
             [center, value, grad] = GrassmannOpt.Center_Mass_pFrobenius;
         end
     else
-        break;
+        if doStiefelEuclidCenter
+            if doGD
+                break;
+            else
+                [center, value, gradnorm] = StiefelOpt.Center_Mass_Euclid;
+            end
+        else
+            break;
+        end
     end
-    %project x to center x and classify it using k-nearest-neighbor on nwpu_train_LPPembedding 
-    isclassified_c = knn(x*center, y, nwpu_train_LPPembedding.x, nwpu_train_LPPembedding.y, k_nearest_neighbor);
+    %project x to center x and classify it using k-nearest-neighbor on the projection via center of all (interpolation number) clusters
+    x_test = x * center;
+    y_test = y;
+    X_train = nwpu_train.x(aggregate_cluster, :) * center;
+    Y_train = nwpu_train.y(aggregate_cluster);    
+    isclassified_c = knn(x_test, y_test, X_train, Y_train, k_nearest_neighbor);
     classified_c(test_index) = isclassified_c;
-    %print
+    %output the result
     fprintf("benchmark classified = %d, center mass classfied = %d\n", isclassified_bm, isclassified_c);
 end
+
+fprintf("benchmark correct classification rate = %f %%, center mass correct classification rate = %f %%\n", (sum(classified_bm)/test_size)*100, (sum(classified_c)/test_size)*100);
 toc;
 
 
@@ -122,15 +148,16 @@ function [isclassified] = knn(x_test, y_test, X_train, Y_train, k)
     end
     dist = zeros(k, 1);
     for i=1:k
-        dist(i) = norm(x_test-X_train(i,:), 'fro');
+        dist(i) = norm(x_test-X_train(i,:));
     end
     [dist_sort, indexes] = sort(dist, 1, 'ascend');
     label = Y_train(indexes(1:k));
     vote = tabulate(label);
+    %disp(Y_train);
     %disp(vote);
-    %fprintf("correct label is %d\n", y_test);
     [max_percent, max_vote_index] = max(vote(:, 3));
     class = vote(max_vote_index, 1);
+    %fprintf("predict label is %d, correct label is %d\n", class, y_test);
     if class == y_test
         isclassified = 1;
     else
@@ -140,7 +167,7 @@ end
 
 
 
-function [nwpu_train, nwpu_train_LPPembedding, Seq, leafs, nwpu_test] = NWPU_LPP_train(kd_nwpuLPP, kd_nwpuPCA, train_size, ht, test_size)
+function [nwpu_train, Seq, leafs, nwpu_test] = NWPU_LPP_train(kd_nwpuLPP, kd_nwpuPCA, train_size, ht, test_size)
 
 %Sample a training dataset nwpu_train from the nwpu-aerial-images data set, nwpu_train = (nwpu_train.x, nwpu_train.y)
 %Set the partition tree depth = ht
@@ -156,7 +183,6 @@ function [nwpu_train, nwpu_train_LPPembedding, Seq, leafs, nwpu_test] = NWPU_LPP
 %   ht = the partition tree height
 %Output
 %   nwpu_train, nwpu_test = the nwpu-aerial-images training/testing data set , size is traing_size/test_size
-%   nwpu_train_LPPembedding = the nwpu_train data set, each is embedded into kd_nwpuLPP dimensional subspace according to its cluster
 %   leafs = leafs{k}, the cluster indexes in nwpu_train
 %   Seq = the LPP frames corresponding to each cluster in nwpu_train, labeling the correponding Grassmann equivalence class
 
@@ -169,7 +195,7 @@ nwpu = load('~/文档/work_SubspaceIndexingStiefleGrassmann/Code_Subspace_indexi
 
 %do an initial PCA on nwpu
 [A0, s0, lat0] = pca(nwpu.x);
-%bulid a given dimensional embedding of nwpu.x into new nwpu.x, for faster computation
+%bulid a given dimensional embedding of nwpu.x into new nwpu.x, for faster computation only
 nwpu.x = nwpu.x * A0(:, 1:256);
 
 %n_nwpu=31500 is the number of samples in nwpu.x dataset, kd_nwpu=4096 is the original dimension of each sample
@@ -182,10 +208,6 @@ train_indexes = indexes(1: train_size);
 nwpu_train.x = double(nwpu.x(train_indexes, :));
 nwpu_train.y = double(nwpu.y(train_indexes, :));
 
-%initialize the nwpu_train_LPPembedding which is embedding nwpu_train into kd_nwpuLPP dimensional space
-nwpu_train_LPPembedding.x = double(zeros(train_size, kd_nwpuLPP));
-nwpu_train_LPPembedding.y = nwpu_train.y;
-
 %randomly pick the test sample of size test_size from nwpu dataset, must be disjoint from nwpu_train
 test_indexes = indexes(train_size + 1: train_size + test_size);
 %form the nwpu_test dataset
@@ -195,15 +217,15 @@ nwpu_test.y = double(nwpu.y(test_indexes, :));
 
 %do an initial PCA on nwpu_train
 [A0, s0, lat0] = pca(nwpu_train.x);
-
-%bulid a kd_nwpuPCA-dimensional embedding of nwpu_train in x0
-x0 = nwpu_train.x * A0(:, 1:kd_nwpuPCA);
-
+%bulid a kd_nwpuPCA dimensional embedding of nwpu_train in x0
+%x0 = nwpu_train.x * A0(:, 1:kd_nwpuPCA);
+x0 = nwpu_train.x;
 %from x0, partition into 2^ht leaf nodes, each leaf node can give samples for a local LPP
 [indx, leafs]=buildVisualWordList(x0, ht);
 
+
 %initialize the LPP frames A_1,...,A_{2^{ht}}
-Seq = zeros(kd_nwpu, kd_nwpuLPP,length(leafs));
+Seq = zeros(kd_nwpu, kd_nwpuLPP, length(leafs));
 % build LPP Model for each leaf
 doBuildNwpuModel = 1;
 % input: nwpu, indx, leafs
@@ -218,7 +240,7 @@ if doBuildNwpuModel
         nwpu_train_x_k = nwpu_train_x_k * PCA_k(:, 1:kd_nwpuPCA);
         %then do LPP for the PCA embedded nwpu_train_x_k and reduce the dimension to kd_nwpu_LPP
         %construct the supervise affinity matrix S
-        between_class_affinity = 0.001;
+        between_class_affinity = 0;
         S_k = affinity_supervised(nwpu_train_x_k, nwpu_train_y_k, between_class_affinity);
         %construct the graph Laplacian L and degree matrix D
         [L_k, D_k] = graph_laplacian(S_k);
@@ -228,8 +250,6 @@ if doBuildNwpuModel
         %obtain the frame Seq(:,:,k)
         Seq(:, :, k) = PCA_k(:, 1:kd_nwpuPCA) * LPP_k(:, 1:kd_nwpuLPP);
         fprintf("frame %d, size = (%d, %d), Stiefel = %f \n", k, size(Seq(:,:,k), 1), size(Seq(:,:,k), 2), norm(Seq(:,:,k)'*Seq(:,:,k)-eye(kd_nwpuLPP), 'fro'));
-        %embed the cluster and its label to kd_nwpuLPP dimensional subspace using the obtained frame
-        nwpu_train_LPPembedding.x(leafs{k}, :) = nwpu_train.x(leafs{k}, :) * Seq(:, :, k);
     end
 end    
 
