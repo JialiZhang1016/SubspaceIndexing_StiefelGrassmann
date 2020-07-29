@@ -22,10 +22,6 @@ do the SIFT (Scale Invariant Feature Transform) PCA analysis
 
 do the SIFT PCA recovery using the Stiefel_Optimization method, compare with benchmark nearest neighbor method
 
-(6) NWPU_LPP.m
+(6) LPP_CenterMass.m
 
-classfication analysis on nwpu-aerial-images dataset based on Laplacian eigenface and graph Laplacian method, as well as center of mass on Grassmann manifold
-
-(7) MNIST_LPP.m
-
-classfication analysis on MNIST dataset based on Laplacian eigenface and graph Laplacian method, as well as center of mass on Grassmann manifold
+classfication analysis based on Laplacian eigenface and graph Laplacian method, as well as center of mass on Grassmann manifold. Applied to several different datasets: nwpu-aerial-images, MNIST, cifar10
