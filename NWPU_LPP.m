@@ -135,38 +135,6 @@ fprintf("benchmark correct classification rate = %f %%, center mass correct clas
 
 
 
-
-
-
-function [isclassified] = knn(x_test, y_test, X_train, Y_train, k)
-% k-nearest neighbor classfication
-% given test data x and label y, find in a training set (X, Y) the k-nearest points x1,...,xk to x, and classify x as majority vote on y1,...,yk
-% if the classification is correct, return 1, otherwise return 0
-    m = length(Y_train);
-    if k>m
-        k=m;
-    end
-    % find the first k-nearest neighbor
-    dist = zeros(m, 1);
-    for i=1:m
-        dist(i) = norm(x_test-X_train(i,:));
-    end
-    [dist_sort, indexes] = sort(dist, 1, 'ascend');
-    % do a majority vote on the first k-nearest neighbor
-    label = Y_train(indexes(1:k));
-    vote = tabulate(label);
-    [max_percent, max_vote_index] = max(vote(:, 3));
-    % class is the predicted label based on majority vote
-    class = vote(max_vote_index, 1);
-    if class == y_test
-        isclassified = 1;
-    else
-        isclassified = 0;
-    end
-end
-
-
-
 function [nwpu_train, Seq, leafs, nwpu_test] = NWPU_LPP_train(kd_nwpuLPP, kd_nwpuPCA, train_size, ht, test_size)
 
 % Sample a training dataset nwpu_train from the nwpu-aerial-images data set, nwpu_train = (nwpu_train.x, nwpu_train.y)
@@ -253,6 +221,35 @@ if doBuildNwpuModel
     end
 end    
 
+end
+
+
+
+function [isclassified] = knn(x_test, y_test, X_train, Y_train, k)
+% k-nearest neighbor classfication
+% given test data x and label y, find in a training set (X, Y) the k-nearest points x1,...,xk to x, and classify x as majority vote on y1,...,yk
+% if the classification is correct, return 1, otherwise return 0
+    m = length(Y_train);
+    if k>m
+        k=m;
+    end
+    % find the first k-nearest neighbor
+    dist = zeros(m, 1);
+    for i=1:m
+        dist(i) = norm(x_test-X_train(i,:));
+    end
+    [dist_sort, indexes] = sort(dist, 1, 'ascend');
+    % do a majority vote on the first k-nearest neighbor
+    label = Y_train(indexes(1:k));
+    vote = tabulate(label);
+    [max_percent, max_vote_index] = max(vote(:, 3));
+    % class is the predicted label based on majority vote
+    class = vote(max_vote_index, 1);
+    if class == y_test
+        isclassified = 1;
+    else
+        isclassified = 0;
+    end
 end
 
 
