@@ -57,7 +57,7 @@ for i = 1:6
     cifar10(i).data = double(cifar10(i).data);
     % do an initial PCA on data
     [A0, s0, lat0] = pca(cifar10(i).data);
-    % bulid a given dimensional d_pre embedding of data.x into new data.x, for faster computation only
+    % bulid a given dimensional d_prepre embedding of cifar10 into new cifar10, for computational memory constraint only
     cifar10(i).data = cifar10(i).data * A0(:, 1:d_prepre);
 end
 data.x = double(cifar10(1).data);
@@ -68,11 +68,6 @@ for i = 2:6
 end
 end
 
-
-doTinyImageNet=0;
-if doTinyImageNet
-    fprintf("\n");
-end
 
 % the data preprocessing projection dimension
 d_pre = 256;
@@ -113,8 +108,8 @@ k_nearest_neighbor = 80; % the parameter k for k-nearest-neighbor classification
 classified_bm = zeros(test_size, 1); % list of classified/not classified projections for using the nearest frame, benchmark
 classified_c = zeros(test_size, 1);  % list of classified/not classified projections for using the Grassmann center method
 
-doGrassmannpFCenter = 0; % do or do not do projected Frobenius center of mass for Grassmannian frame
-doStiefelEuclidCenter = 1; % do or do not do Euclid center of mass for Stiefel frame 
+doGrassmannpFCenter = 1; % do or do not do projected Frobenius center of mass for Grassmannian frame
+doStiefelEuclidCenter = 0; % do or do not do Euclid center of mass for Stiefel frame 
 doGD = 0; % do or do not do GD for finding projected Frobenius center of mass
 
 tic;
