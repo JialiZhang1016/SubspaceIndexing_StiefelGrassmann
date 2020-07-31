@@ -18,7 +18,7 @@ data = load('~/文档/work_SubspaceIndexingStiefleGrassmann/Code_Subspace_indexi
 end
 
 
-doMNIST=0;
+doMNIST=1;
 if doMNIST
 % load the MNIST dataset
 % structure: 
@@ -33,7 +33,7 @@ data.y = double(vertcat(mnist.trainY', mnist.testY'));
 end
 
 
-doCIFAR10=1;
+doCIFAR10=0;
 if doCIFAR10
 % load the CIFAR-10 dataset, data from https://www.cs.toronto.edu/~kriz/cifar.html
 % structure: 
