@@ -33,6 +33,7 @@ class Stiefel_Optimization:
         self.threshold_checkonStiefel=threshold_checkonStiefel
         self.threshold_logStiefel=threshold_logStiefel
         
+        
     # given the matrix A in St(p, n), complete it into Q = [A B] in SO(n)
     def Complete_SpecialOrthogonal(self, A):
         # first turn the matrix A into an array
@@ -54,9 +55,49 @@ class Stiefel_Optimization:
             Q[0:n-1, p] = -Q[0:n-1, p]
         return Q
     
-    # directly calculate the Euclidean center of mass that is the St(p, n) minimizer of f_F(A)=\sum_{k=1}^m w_k\|A-A_k\|_F^2, according to our elegant lemma based on SVD
+    
+    # calculate the function value and the gradient on Stiefel manifold St(p, n) 
+    # of the Euclidean center of mass function f_F(A)=\sum_{k=1}^m w_k \|A-A_k\|_F^2
+    def Center_Mass_function_gradient_Euclid(self, Y):
+        # identify m
+        m = len(self.omega)
+        n = len(self.Seq[0])
+        p = len(self.Seq[0][0])
+        # evaluate f
+        f = 0
+        for i in range(m):
+            f = f + self.omega[i]*((np.linalg.norm(Y-self.Seq[i]))**2)
+        # evaluate gradf
+        gradf = np.zeros((n, p), dtype=float)
+        for i in range(m):
+            gradf = gradf + 2*self.omega[i]*((Y-self.Seq[i])-np.matmul(np.matmul(Y, (Y-self.Seq[i]).T), Y));
+        return f, gradf
+    
+    # directly calculate the Euclidean center of mass that is the St(p, n) minimizer of f_F(A)=\sum_{k=1}^m w_k\|A-A_k\|_F^2, 
+    # according to our elegant lemma based on SVD
     def Center_Mass_Euclid(self):
-        return 0
+        # identify m, n and p
+        m = len(self.omega)
+        n = len(self.Seq[0])
+        p = len(self.Seq[0][0])
+        # form B = \sum_{k=1}^m w_k A_k
+        B = np.zeros((n, p), dtype=float)
+        for i in range(m):
+            B = B + self.omega[i] * self.Seq[i]
+        # do svd on B
+        O1, D, O2 = np.linalg.svd(B, full_matrices=True)
+        D = np.diag(D)
+        # form the Euclid Center of Mass according to our elegant lemma based on SVD
+        Mtx = np.zeros((p, n), dtype=float)
+        for j in range(p):
+            Mtx[j][j]=1
+        Mtx = Mtx.T
+        Euclid_Center = np.matmul(np.matmul(O1, Mtx), O2)
+        # evaluate f_F(A)=\sum_{k=1}^m w_k\|A-A_k\|_F^2 at the center and its grad norm
+        value, grad = self.Center_Mass_function_gradient_Euclid(Euclid_Center)
+        gradnorm = np.linalg.norm(grad)
+        return Euclid_Center, value, gradnorm
+
 
     # test if the given matrix Y is on the Stiefel manifold St(p, n)
     def CheckOnStiefel(self, Y):
@@ -77,6 +118,7 @@ class Stiefel_Optimization:
         else:
             ifStiefel = False
         return ifStiefel, distance
+
 
     # test if the given matrix H is on the tangent space of Stiefel manifold T_Y St(p, n)
     def CheckTangentStiefel(self, Y, H):
@@ -99,6 +141,7 @@ class Stiefel_Optimization:
         else:
             ifTangentStiefel = False
         return ifTangentStiefel, distance
+
 
     # calculate the projection onto tangent space of Stiefel manifold St(p, n)
     def projection_tangent(self, Y, Z):
@@ -129,16 +172,17 @@ testing the Optimization Calculus on Stiefel and Grassmann manifolds
 if __name__ == "__main__":
     
     # number of frames to find center-of-mass
-    number = 3
+    m = 3
     # set the sequence of Stiefel matrices in St(p, n)
     n = 4
     p = 2
-    Seq = np.array([[[0 for _ in range(p)] for _ in range(n)] for _ in range(number)])
+    Seq = np.array([[[0 for _ in range(p)] for _ in range(n)] for _ in range(m)])
     Seq[0] = np.array([[1, 0], [0, 1], [0, 0], [0, 0]])
     Seq[1] = np.array([[1, 0], [0, 0], [0, 0], [0, 1]])
     Seq[2] = np.array([[0, 0], [0, 1], [0, 0], [1, 0]])
     # set the weights
-    omega = [1, 1, 1]
+    omega = np.array([1, 3, 4])
+    omega = omega.astype(np.float)
     # set the threshold numbers
     threshold_gradnorm = 1e-4
     threshold_fixedpoint = 1e-4
@@ -149,7 +193,7 @@ if __name__ == "__main__":
     StiefelOpt = Stiefel_Optimization(omega, Seq, threshold_gradnorm, threshold_fixedpoint, threshold_checkonStiefel, threshold_logStiefel)
     
     # do check Stiefel and check tangent Stiefel
-    docheckStiefel = 1
+    docheckStiefel = 0
     if docheckStiefel:
         Y = Seq[1]
         H = Seq[0]
@@ -164,7 +208,7 @@ if __name__ == "__main__":
 
         
     # do complete special orthogonal
-    doComplete_SpecialOrthogonal = 1
+    doComplete_SpecialOrthogonal = 0
     if doComplete_SpecialOrthogonal:
         A = Seq[2]
         Q = StiefelOpt.Complete_SpecialOrthogonal(A)
@@ -175,3 +219,12 @@ if __name__ == "__main__":
         print("Check A on Stiefel = ", ifStiefel_A, ", distance = ", distance_A, "\n")
         print("Check Q on Stiefel = ", ifStiefel_Q, ", distance = ", distance_Q, "\n")
         
+        
+    # do Euclid center of mass
+    doCenterMassEuclid = 1
+    if doCenterMassEuclid:
+        center, value, gradnorm = StiefelOpt.Center_Mass_Euclid()
+        for i in range(m):
+            print("frame ", i+1, "weight is ", omega[i], " matrix is \n", Seq[i], "\n")
+        print("center is \n", center, "\n")
+        print("function f_F(A)=\sum_{k=1}^m w_k\|A-A_k\|_F^2\nvalue is ", value, " gradnorm is ", gradnorm, "\n")
