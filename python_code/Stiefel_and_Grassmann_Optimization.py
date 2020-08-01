@@ -53,8 +53,69 @@ class Stiefel_Optimization:
         if np.linalg.det(Q)<0:
             Q[0:n-1, p] = -Q[0:n-1, p]
         return Q
+    
+    # directly calculate the Euclidean center of mass that is the St(p, n) minimizer of f_F(A)=\sum_{k=1}^m w_k\|A-A_k\|_F^2, according to our elegant lemma based on SVD
+    def Center_Mass_Euclid(self):
+        return 0
 
+    # test if the given matrix Y is on the Stiefel manifold St(p, n)
+    def CheckOnStiefel(self, Y):
+        # Y is the matrix to be tested, threshold is a threshold value, if \|Y^TY-I_p\|_F < threshold then return true
+        # first turn Y into an array   
+        Y = np.array(Y)
+        n = len(Y)
+        p = len(Y[0])
+        # form I_p matrix
+        eye_p = np.zeros((p, p), dtype=float)
+        np.fill_diagonal(eye_p, 1)
+        # compute Y^T*Y-I_p
+        Mtx = np.matmul(Y.T, Y) - eye_p
+        # compute \|Y^T*Y-I_p\|_F
+        distance = np.linalg.norm(Mtx)
+        if distance <= self.threshold_checkonStiefel:
+            ifStiefel = True
+        else:
+            ifStiefel = False
+        return ifStiefel, distance
 
+    # test if the given matrix H is on the tangent space of Stiefel manifold T_Y St(p, n)
+    def CheckTangentStiefel(self, Y, H):
+        # H is the matrix to be tested, threshold is a threshold value, if \|Y^TH+H^TY\| < threshold then return true
+        # first turn Y and H into an array   
+        Y = np.array(Y)
+        H = np.array(H)
+        n = len(Y)
+        p = len(Y[0])
+        n_H = len(H)
+        p_H = len(H[0])
+        # check if H is tangent to St(p, n) at Y
+        if n==n_H and p==p_H:
+            Mtx = np.add(np.matmul(Y.T, H), np.matmul(H.T, Y))
+            distance = np.linalg.norm(Mtx)
+            if distance <= self.threshold_checkonStiefel:
+                ifTangentStiefel = True
+            else:
+                ifTangentStiefel = False
+        else:
+            ifTangentStiefel = False
+        return ifTangentStiefel, distance
+
+    # calculate the projection onto tangent space of Stiefel manifold St(p, n)
+    def projection_tangent(self, Y, Z):
+        # Pi_{T, Y}(Z) projects matrix Z of size n by p onto the tangent space of St(p, n) at point Y\in St(p, n)
+        # returns the tangent vector prj_tg on T_Y(St(p, n))
+        # first turn Y into an array   
+        Y = np.array(Y)
+        n = len(Y)
+        p = len(Y[0])
+        # compute (Y' * Z - Z' * Y)/2        
+        skew = np.subtract(np.matmul(Y.T, Z), np.matmul(Z.T, Y))/2
+        # form I_n matrix
+        eye_n = np.zeros((n, n), dtype=float)
+        np.fill_diagonal(eye_n, 1)        
+        # compute the projection
+        prj_tg = np.add(np.matmul(Y, skew), np.matmul(np.subtract(eye_n, np.matmul(Y, Y.T)), Z))
+        return prj_tg
 
 
 
@@ -87,10 +148,30 @@ if __name__ == "__main__":
     # set the Stiefel Optimization object
     StiefelOpt = Stiefel_Optimization(omega, Seq, threshold_gradnorm, threshold_fixedpoint, threshold_checkonStiefel, threshold_logStiefel)
     
+    # do check Stiefel and check tangent Stiefel
+    docheckStiefel = 1
+    if docheckStiefel:
+        Y = Seq[1]
+        H = Seq[0]
+        ifStiefel, distance = StiefelOpt.CheckOnStiefel(Y)
+        ifTangentStiefel, distance_tg = StiefelOpt.CheckTangentStiefel(Y, H)
+        print("\nY= ", Y, "\nH=", H)
+        print("\nifStiefel Y=", ifStiefel, "\nifTangentStiefel H to Y=", ifTangentStiefel)
+        H_prj = StiefelOpt.projection_tangent(Y, H)
+        ifTangentStiefel, distance_tg = StiefelOpt.CheckTangentStiefel(Y, H_prj)
+        print("\nH_prj=", H_prj)
+        print("\nifTangentStiefel H_prj to Y=", ifTangentStiefel, "\n")
+
+        
     # do complete special orthogonal
     doComplete_SpecialOrthogonal = 1
     if doComplete_SpecialOrthogonal:
         A = Seq[2]
         Q = StiefelOpt.Complete_SpecialOrthogonal(A)
-        print("A=\n", A, "\nA'*A=\n", np.matmul(A.T, A))
-        print("Q=\n", Q, "\nQ'*Q=\n", np.matmul(Q.T, Q), "\nQ*Q'=\n", np.matmul(Q, Q.T))
+        print("A=\n", A, "\nA'*A=\n", np.matmul(A.T, A), "\n")
+        print("Q=\n", Q, "\nQ'*Q=\n", np.matmul(Q.T, Q), "\nQ*Q'=\n", np.matmul(Q, Q.T), "\n")
+        ifStiefel_A, distance_A = StiefelOpt.CheckOnStiefel(A)
+        ifStiefel_Q, distance_Q = StiefelOpt.CheckOnStiefel(Q)
+        print("Check A on Stiefel = ", ifStiefel_A, ", distance = ", distance_A, "\n")
+        print("Check Q on Stiefel = ", ifStiefel_Q, ", distance = ", distance_Q, "\n")
+        
