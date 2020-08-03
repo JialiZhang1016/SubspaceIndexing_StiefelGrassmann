@@ -2,7 +2,7 @@
 
 a project by Wenqing Hu, Tiefeng Jiang and Li Zhu
 
-<i>(a) folder "matlab_code"</i>
+<b>(a) folder "matlab_code"</b>
 
 (1) Stiefel_Optimization.m 
 
@@ -28,6 +28,6 @@ do the SIFT PCA recovery using the Stiefel_Optimization method, compare with ben
 
 classfication analysis based on Laplacian eigenface and graph Laplacian method, as well as center of mass on Grassmann manifold. Applied to several different datasets: nwpu-aerial-images, MNIST, cifar10
 
-<i>(b) folder "python_code"</i>
+<b>(b) folder "python_code"</b>
 
 files with same names and functions as matlab_code
