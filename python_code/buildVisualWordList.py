@@ -100,10 +100,11 @@ def buildVisualWordList(x, ht):
             print("\n split [", k, ":", nk, "] at", d_cut, ": ", sv[moffs]) 
                 
             # clean up node k
-            #offs[k-1] = []
-
+            offs[k-1] = []
+            
+    #print("offs=", offs)
     # leaf nodes
-    leafs = [offs[2**ht+j-1] for j in range(nLeafNode)]
+    leafs = sorted([offs[2**ht+j-1] for j in range(nLeafNode)])
     #print("leafs=", leafs)
     
     mbrs = [{"min": min([x[_][0] for _ in leafs[j]]), "max": max([x[_][0] for _ in leafs[j]])} for j in range(nLeafNode)]
@@ -125,7 +126,7 @@ testing buildVisualWordList
 if __name__ == "__main__":
     
     x = [[1, 2], [3, 4], [5, 6], [7, 8], [9, 10], [11, 12], [13, 14], [15, 16], [17, 18], [19, 20], [21, 22], [23, 24], [25, 26], [27, 28], [29, 30], [31, 32]]
-    ht = 4
+    ht = 2
     indx, leafs, mbrs = buildVisualWordList(x, ht)
     print("leafs=", leafs)
     print("indx=", indx)
