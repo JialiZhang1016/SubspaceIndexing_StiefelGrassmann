@@ -107,7 +107,7 @@ def buildVisualWordList(x, ht):
     leafs = sorted([offs[2**ht+j-1] for j in range(nLeafNode)])
     #print("leafs=", leafs)
     
-    mbrs = [{"min": min([x[_][0] for _ in leafs[j]]), "max": max([x[_][0] for _ in leafs[j]])} for j in range(nLeafNode)]
+    mbrs = [{"min": [min([x[_][col] for _ in leafs[j]]) for col in range(kd)], "max": [max([x[_][col] for _ in leafs[j]]) for col in range(kd)]} for j in range(nLeafNode)]
     #print("mbrs=", mbrs)
     
     return indx, leafs, mbrs
