@@ -14,6 +14,7 @@ from operator import itemgetter
 import numpy as np
 import pandas as pd
 from scipy.linalg import eigh
+from scipy.spatial.distance import cdist
 
 
 # k-nearest neighbor classfication
@@ -72,7 +73,28 @@ def graph_laplacian(S):
     return L, D
 
 
-
+# given a set of data points X={x1,...,xm} with label Y={y1,...,ym}, construct their supervised affinity matrix S for LPP
+def affinity_supervised(X, Y, between_class_affinity):
+    # original distances squares between xi and xj
+    f_dist1 = cdist(X, X, 'euclidean')
+    # heat kernel size
+    mdist = np.mean(f_dist1) 
+    h = -np.log(0.15)/mdist
+    S1 = np.exp(-h*f_dist1)
+    #print("S1=", S1)
+    # utilize supervised info
+    # first turn Y into a 2-d array
+    Y = [[Y[_]] for _ in range(len(Y))]
+    id_dist = cdist(Y, Y)
+    #print("id_dist=", id_dist)
+    S2 = S1 
+    for i in range(len(X)):
+        for j in range(len(X)):
+            if id_dist[i][j] != 0:
+                S2[i][j] = between_class_affinity
+    # obtain the supervised affinity S
+    S = S2
+    return S
 
 
 """
@@ -105,3 +127,10 @@ if __name__ == "__main__":
     W, LAMBDA = LPP(X, L, D)
     print("W=", W)
     print("LAMBDA=", LAMBDA)
+    
+    X = [[0, 1, 2], [2, 3, 4]]
+    Y = [1, 2]
+    between_class_affinity = 0
+    S = affinity_supervised(X, Y, between_class_affinity)
+    print("S=", S)
+    
