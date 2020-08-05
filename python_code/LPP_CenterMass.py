@@ -85,7 +85,7 @@ def affinity_supervised(X, Y, between_class_affinity):
     # utilize supervised info
     # first turn Y into a 2-d array
     Y = [[Y[_]] for _ in range(len(Y))]
-    id_dist = cdist(Y, Y)
+    id_dist = cdist(Y, Y, 'euclidean')
     #print("id_dist=", id_dist)
     S2 = S1 
     for i in range(len(X)):
