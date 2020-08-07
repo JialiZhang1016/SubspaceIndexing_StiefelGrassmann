@@ -98,6 +98,28 @@ def affinity_supervised(X, Y, between_class_affinity):
     return S
 
 
+# given the matrix A in St(p, n), complete it into Q = [A B] in SO(n)
+def Complete_SpecialOrthogonal(A):
+    # first turn the matrix A into an array
+    A = np.array(A)
+    # the number of rows in A
+    n = len(A)
+    # the number of columns in A
+    p = len(A[0])
+    # full svd decomposition of A
+    O1, D, O2 = np.linalg.svd(A, full_matrices=True)
+    D = np.diag(D)
+    # extend O2 to O2_ext = [O2 zeros(p, n-p); zeros(n-p, p) eye(n-p)]
+    O2_ext = np.pad(O2, ((0,n-p),(0,n-p)), 'constant', constant_values = (0,0))
+    for j in range(n-p):
+        O2_ext[p+j][p+j]=1
+    # compute Q = O1 * O2_ext, if det(Q)=-1, make it +1 
+    Q = np.matmul(O1, O2_ext)
+    if np.linalg.det(Q)<0:
+        Q[0:n-1, p] = -Q[0:n-1, p]
+    return Q
+
+
 # Sample a training dataset data_train from the data set, data_train = (data_train.x, data_train.y)
 # Set the partition tree depth = ht
 # Tree partition nwpu_train into clusters C_1, ..., C_{2^{ht}} with centers m_1, ..., m_{2^{ht}}
@@ -140,12 +162,14 @@ def LPP_train(data, d_pre, kd_LPP, kd_PCA, train_size, ht, test_size):
     # form the data_train dataset
     data_train_x = [data_x[_] for _ in train_indexes]
     data_train_y = [data_y[_] for _ in train_indexes]
+    data_train = {"x": data_train_x, "y": data_train_y}
     
     # randomly pick the test sample of size test_size from data dataset, must be disjoint from data_train
     test_indexes = [indexes[_]  for _ in range(train_size, train_size + test_size)]
     # form the data_test dataset
     data_test_x = [data_x[_] for _ in test_indexes]
     data_test_y = [data_y[_] for _ in test_indexes]
+    data_test = {"x": data_test_x, "y": data_test_y}
     
     # do an initial PCA on data_train
     pca = PCA()
@@ -157,7 +181,7 @@ def LPP_train(data, d_pre, kd_LPP, kd_PCA, train_size, ht, test_size):
     indx, leafs, mbrs = buildVisualWordList(x0, ht)
 
     # initialize the LPP frames A_1,...,A_{2^{ht}}
-    Seq = np.zeros((kd_data, kd_LPP, len(leafs)))
+    Seq = np.zeros((len(leafs), kd_data, kd_LPP))
     # build LPP Model for each leaf
     doBuildDataModel = 1
     # input: data, indx, leafs
@@ -167,23 +191,24 @@ def LPP_train(data, d_pre, kd_LPP, kd_PCA, train_size, ht, test_size):
             data_train_x_k = [data_train_x[_] for _ in leafs[k]]
             data_train_y_k = [data_train_y[_] for _ in leafs[k]]
             # do an initial PCA first, for the k-th cluster, so data_train_x_k dimension is reduced to kd_PCA
-            #[PCA_k, lat] = pca(data_train_x_k);
-            #PCA_k = Complete_SpecialOrthogonal(PCA_k);
-            #data_train_x_k = data_train_x_k * PCA_k(:, 1:kd_PCA);
+            pca.fit(data_train_x_k)
+            PCA_k = pca.components_
+            PCA_k = Complete_SpecialOrthogonal(PCA_k.T).T
+            data_train_x_k = np.matmul(data_train_x_k, np.array([PCA_k[_] for _ in range(kd_PCA)]))
             # then do LPP for the PCA embedded data_train_x_k and reduce the dimension to kd_LPP
             # construct the supervise affinity matrix S
-            #between_class_affinity = 0;
-            #S_k = affinity_supervised(data_train_x_k, data_train_y_k, between_class_affinity);
+            between_class_affinity = 0
+            S_k = affinity_supervised(data_train_x_k, data_train_y_k, between_class_affinity)
             # construct the graph Laplacian L and degree matrix D
-            #[L_k, D_k] = graph_laplacian(S_k);
+            L_k, D_k = graph_laplacian(S_k)
             # do LPP
-            #[A_k, lambda] = LPP(data_train_x_k, L_k, D_k);
-            #[LPP_k, R] = qr(A_k);        
+            A_k, LAMBDA = LPP(data_train_x_k, L_k, D_k)
+            LPP_k, R = np.linalg.qr(A_k)        
             # obtain the frame Seq(:,:,k)
-            #Seq(:, :, k) = PCA_k(:, 1:kd_PCA) * LPP_k(:, 1:kd_LPP);
-            #fprintf("frame %d, size = (%d, %d), Stiefel = %f \n", k, size(Seq(:,:,k), 1), size(Seq(:,:,k), 2), norm(Seq(:,:,k)'*Seq(:,:,k)-eye(kd_LPP), 'fro'));
+            Seq[k] = np.matmul(np.array([PCA_k[_] for _ in range(kd_PCA)]), np.array([LPP_k[_] for _ in range(kd_LPP)]))
+            print("frame ",k," size=(", len(Seq[k]),",",len(Seq[k][0]), "), Stiefel = ", np.linalg.norm(np.array(np.matmul(Seq[k].T, Seq[k]))-np.array(np.diag(np.ones(kd_LPP)))))
 
-    return 0
+    return data_train, data_test, leafs, Seq
 
 
 """
