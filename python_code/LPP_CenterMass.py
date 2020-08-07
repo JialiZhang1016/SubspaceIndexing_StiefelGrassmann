@@ -15,6 +15,7 @@ import numpy as np
 import pandas as pd
 from scipy.linalg import eigh
 from scipy.spatial.distance import cdist
+from sklearn.decomposition import PCA
 
 
 # k-nearest neighbor classfication
@@ -97,6 +98,94 @@ def affinity_supervised(X, Y, between_class_affinity):
     return S
 
 
+# Sample a training dataset data_train from the data set, data_train = (data_train.x, data_train.y)
+# Set the partition tree depth = ht
+# Tree partition nwpu_train into clusters C_1, ..., C_{2^{ht}} with centers m_1, ..., m_{2^{ht}}
+# first project each C_i to local PCA with dimension kd_PCA  
+# then continue to construct the local LPP frames A_1, ..., A_{2^{ht}} in G(kd_data, kd_LPP) using supervised affinity
+# Sample a test dataset data_test from the data set for testing purposes, data_test = (data_test.x, data_test.y)
+def LPP_train(data, d_pre, kd_LPP, kd_PCA, train_size, ht, test_size):
+    # Input
+    #   data = the original data set, in the python code we treat it as a dictionary data={"x": [inputs], "y": [labels]}
+    #   d_pre = the data preprocessing projection dimension
+    #   kd_PCA = the initial PCA embedding dimension
+    #   kd_LPP = the LPP embedding dimension 
+    #   train_size, test_size = the training/testing data set size
+    #   ht = the partition tree height
+    # Output
+    #   data_train, data_test = the training/testing data set , size is traing_size/test_size
+    #   leafs = leafs{k}, the cluster indexes in data_train
+    #   Seq = the LPP frames corresponding to each cluster in data_train, labeling the correponding Grassmann equivalence class
+    
+    # read the data into inputs and labels
+    data_x = data['x']
+    data_y = data['y']
+    data_x = np.array(data_x)
+    data_y = np.array(data_y)
+    
+    # do an initial PCA on data
+    pca = PCA()
+    pca.fit(data_x)
+    A0 = pca.components_
+    # bulid a given dimensional d_pre embedding of data_x into new data_x, for faster computation only
+    data_x = np.matmul(data_x, np.array([A0[_] for _ in range(d_pre)]))
+    
+    # n_data is the number of samples in data_x dataset, kd_data is the original dimension of each sample
+    n_data = len(data_x)
+    kd_data = len(data_x[0])
+    
+    indexes = np.random.permutation(n_data) 
+    # randomly pick the training sample of size train_size from data.x dataset
+    train_indexes = [indexes[_] for _ in range(train_size)]
+    # form the data_train dataset
+    data_train_x = [data_x[_] for _ in train_indexes]
+    data_train_y = [data_y[_] for _ in train_indexes]
+    
+    # randomly pick the test sample of size test_size from data dataset, must be disjoint from data_train
+    test_indexes = [indexes[_]  for _ in range(train_size, train_size + test_size)]
+    # form the data_test dataset
+    data_test_x = [data_x[_] for _ in test_indexes]
+    data_test_y = [data_y[_] for _ in test_indexes]
+    
+    # do an initial PCA on data_train
+    pca = PCA()
+    pca.fit(data_train_x)
+    A0 = pca.components_
+    # bulid a kd_PCA dimensional embedding of data_train in x0
+    x0 = np.matmul(data_train_x, np.array([A0[_] for _ in range(kd_PCA)]))
+    # from x0, partition into 2^ht leaf nodes, each leaf node can give samples for a local LPP
+    indx, leafs, mbrs = buildVisualWordList(x0, ht)
+
+    # initialize the LPP frames A_1,...,A_{2^{ht}}
+    Seq = np.zeros((kd_data, kd_LPP, len(leafs)))
+    # build LPP Model for each leaf
+    doBuildDataModel = 1
+    # input: data, indx, leafs
+    if doBuildDataModel:
+        for k in range(len(leafs)):
+            # form the data_train subsample for the k-th cluster
+            data_train_x_k = [data_train_x[_] for _ in leafs[k]]
+            data_train_y_k = [data_train_y[_] for _ in leafs[k]]
+            # do an initial PCA first, for the k-th cluster, so data_train_x_k dimension is reduced to kd_PCA
+            #[PCA_k, lat] = pca(data_train_x_k);
+            #PCA_k = Complete_SpecialOrthogonal(PCA_k);
+            #data_train_x_k = data_train_x_k * PCA_k(:, 1:kd_PCA);
+            # then do LPP for the PCA embedded data_train_x_k and reduce the dimension to kd_LPP
+            # construct the supervise affinity matrix S
+            #between_class_affinity = 0;
+            #S_k = affinity_supervised(data_train_x_k, data_train_y_k, between_class_affinity);
+            # construct the graph Laplacian L and degree matrix D
+            #[L_k, D_k] = graph_laplacian(S_k);
+            # do LPP
+            #[A_k, lambda] = LPP(data_train_x_k, L_k, D_k);
+            #[LPP_k, R] = qr(A_k);        
+            # obtain the frame Seq(:,:,k)
+            #Seq(:, :, k) = PCA_k(:, 1:kd_PCA) * LPP_k(:, 1:kd_LPP);
+            #fprintf("frame %d, size = (%d, %d), Stiefel = %f \n", k, size(Seq(:,:,k), 1), size(Seq(:,:,k), 2), norm(Seq(:,:,k)'*Seq(:,:,k)-eye(kd_LPP), 'fro'));
+
+    return 0
+
+
 """
 ################################ MAIN RUNNING FILE #####################################
 
@@ -128,8 +217,8 @@ if __name__ == "__main__":
     print("W=", W)
     print("LAMBDA=", LAMBDA)
     
-    X = [[0, 1, 2], [2, 3, 4]]
-    Y = [1, 2]
+    X = [[0, 1, 2], [2, 3, 4], [4, 5, 6]]
+    Y = [1, 2, 1]
     between_class_affinity = 0
     S = affinity_supervised(X, Y, between_class_affinity)
     print("S=", S)
