@@ -62,7 +62,7 @@ def load_data(doNWPU, doMNIST, doCIFAR10):
         data = {"x": [0], "y": [1]}
         
     return data
-    
+
 
 # k-nearest neighbor classfication
 # given test data x and label y, find in a training set (X, Y) the k-nearest points x1,...,xk to x, and classify x as majority vote on y1,...,yk
@@ -250,9 +250,10 @@ def LPP_train(data, d_pre, kd_LPP, kd_PCA, train_size, ht, test_size):
             LPP_k, R = np.linalg.qr(A_k)        
             # obtain the frame Seq(:,:,k)
             Seq[k] = np.matmul(np.array([PCA_k[_] for _ in range(kd_PCA)]).T, np.array([LPP_k[_] for _ in range(kd_LPP)]).T)
-            print("frame ",k," size=(", len(Seq[k]),",",len(Seq[k][0]), "), Stiefel = ", np.linalg.norm(np.array(np.matmul(Seq[k].T, Seq[k]))-np.array(np.diag(np.ones(kd_LPP)))))
+            print("frame ",k+1," size=(", len(Seq[k]),",",len(Seq[k][0]), "), Stiefel = ", np.linalg.norm(np.array(np.matmul(Seq[k].T, Seq[k]))-np.array(np.diag(np.ones(kd_LPP)))))
 
     return data_train, Seq, leafs, data_test
+
 
 
 """
@@ -263,7 +264,7 @@ LPP analysis based on Grassmann center of mass calculation
 
 if __name__ == "__main__":
     
-    # do test functions developed
+    # do test correctness of the specific functions developed
     doruntest=0
     if doruntest:
         x = [[1, 2], [3, 4], [5, 6], [7, 8], [9, 10], [11, 12], [13, 14], [15, 16], [17, 18], [19, 20], [21, 22], [23, 24], [25, 26], [27, 28], [29, 30], [31, 32]]
@@ -295,6 +296,8 @@ if __name__ == "__main__":
         S = affinity_supervised(X, Y, between_class_affinity)
         print("S=", S)
     
+ 
+    
     # do the LPP analysis on different datasets
     dorunfile = 1
     # select which dataset to work on
@@ -321,4 +324,120 @@ if __name__ == "__main__":
         # obtain the train, test sets in nwpu and the LPP frames Seq(:,:,k) for each cluster with indexes in leafs
         data_train, Seq, leafs, data_test = LPP_train(data, d_pre, kd_LPP, kd_PCA, train_size, ht, test_size)
 
+        print(len(data_train["x"]), len(data_train["x"][0]))
+        print(len(data_test["x"]), len(data_test["x"][0]))
         print(len(Seq[0]), len(Seq[0][0]))
+    
+#   % all these LPP Stiefel frames are on St(n, p)
+#   n = size(Seq, 1);
+#   p = size(Seq, 2);
+#
+#   % data original dimension kd_data
+#   kd_data = size(data_train.x, 2);
+#   
+#   % find m_1, ..., m_{2^{ht}}, the means of the chosen clusters
+#   m = zeros(kd_data, 2^ht);
+#   for k=1:2^ht 
+#       m(:, k) = mean(data_train.x(leafs{k}, :), 1);
+#   end
+#
+#   % set the sequence of interpolation numbers and the threshold ratio for determining the interpolation number
+#   interpolation_number_seq = ones(test_size, 1);
+#   ratio_threshold = 1.001;
+#   
+#   K = 1e-8; % the scaling coefficient for calculating the weights w = e^{-K distance^2}
+#   k_nearest_neighbor = 80; % the parameter k for k-nearest-neighbor classification
+#   
+#   classified_bm = zeros(test_size, 1); % list of classified/not classified projections for using the nearest frame, benchmark
+#   classified_c = zeros(test_size, 1);  % list of classified/not classified projections for using the Grassmann center method
+#   
+#   doGrassmannpFCenter = 1; % do or do not do projected Frobenius center of mass for Grassmannian frame
+#   doStiefelEuclidCenter = 0; % do or do not do Euclid center of mass for Stiefel frame 
+#   doGD = 0; % do or do not do GD for finding projected Frobenius center of mass
+#   
+#   tic;
+#   for test_index=1:test_size
+#        fprintf("\ntest point %d -----------------------------------------------------------\n", test_index);
+#        x = data_test.x(test_index, :);
+#        y = data_test.y(test_index);
+#        % sort the cluster centers m_1, ..., m_{2^{ht}} by ascending distances to x 
+#        dist = zeros(2^ht, 1);
+#        for k=1:2^ht
+#            dist(k) = norm(x-m(:, k));
+#        end
+#        [dist_sort, indexes] = sort(dist, 1, 'ascend');
+#        % count the number of St(p, n) interpolation clusters for current test point x
+#        % interpolation_number = number of frames used for interpolation between cluster LDA frames
+#        interpolation_number = 1;
+#        for k=2:2^ht
+#            if dist_sort(k) <= ratio_threshold * dist_sort(1)
+#                interpolation_number = interpolation_number + 1;
+#            else
+#                break;
+#            end    
+#        end
+#        fprintf("interpolation number = %d\n", interpolation_number);
+#        % record the sequence of all interpolation numbers for each test point x
+#        interpolation_number_seq(test_index) = interpolation_number;
+#        % find the LPP Stiefel projection frames A_k1, ..., A_k{interpolation_number} for the first (interpolation_number) closest clusters to x
+#        frames = zeros(kd_data, kd_LPP, interpolation_number);
+#        for i=1:interpolation_number
+#            frames(:, :, i) = Seq(:, :, indexes(i));
+#            end
+#            % find the weights w_1, ..., w_{interpolation_number} for the first (interpolation_number) closest clusters to x
+#            w = zeros(interpolation_number, 1);
+#        for i=1:interpolation_number
+#            w(i) = exp(- K * (dist_sort(i))^2);
+#        end
+#        % collect all indexes in clusters corresponding to the first (interpolation_number) closest clusters to x
+#        aggregate_cluster = [];
+#        for i=1:interpolation_number
+#            aggregate_cluster = union(aggregate_cluster, leafs{indexes(i)});
+#        end
+#        % project x to A1 x and classify it using k-nearest-neighbor on the projection via A1 of the closest cluster
+#        x_test = x * frames(:,:,1);
+#        y_test = y;
+#        X_train = data_train.x(leafs{indexes(1)}, :) * frames(:,:,1);
+#        Y_train = data_train.y(leafs{indexes(1)});
+#        isclassified_bm = knn(x_test, y_test, X_train, Y_train, k_nearest_neighbor);
+#        classified_bm(test_index) = isclassified_bm;
+#        % calculate the center of mass for the (interpolation_number) nearest cluster LPP frames with respect to weights w 
+#        threshold_gradnorm = 1e-4;
+#        threshold_fixedpoint = 1e-4;
+#        threshold_checkonGrassmann = 1e-10;
+#        threshold_checkonStiefel = 1e-10;
+#        threshold_logStiefel = 1e-4;
+#        if doGrassmannpFCenter
+#            % do Grassmann center of mass method
+#            GrassmannOpt = Grassmann_Optimization(w, frames, threshold_gradnorm, threshold_fixedpoint, threshold_checkonGrassmann);
+#            if doGD
+#                break;
+#            else
+#                [center, value, grad] = GrassmannOpt.Center_Mass_pFrobenius;
+#            end
+#        else
+#            % do Stiefel center of mass method
+#            StiefelOpt = Stiefel_Optimization(w, frames, threshold_gradnorm, threshold_fixedpoint, threshold_checkonStiefel, threshold_logStiefel);
+#            if doStiefelEuclidCenter
+#                if doGD
+#                    break;
+#                else
+#                    [center, value, gradnorm] = StiefelOpt.Center_Mass_Euclid;
+#                end
+#            else
+#                break;
+#            end
+#        end
+#        % project x to center x and classify it using k-nearest-neighbor on the projection via center of all (interpolation number) clusters
+#        x_test = x * center;
+#        y_test = y;
+#        X_train = data_train.x(aggregate_cluster, :) * center;
+#        Y_train = data_train.y(aggregate_cluster);    
+#        isclassified_c = knn(x_test, y_test, X_train, Y_train, k_nearest_neighbor);
+#        classified_c(test_index) = isclassified_c;
+#        % output the result
+#        fprintf("benchmark classified = %d, center mass classfied = %d\n", isclassified_bm, isclassified_c);
+#        end
+#    toc;
+#
+#    fprintf("benchmark correct classification rate = %f %%, center mass correct classification rate = %f %%\n", (sum(classified_bm)/test_size)*100, (sum(classified_c)/test_size)*100);
