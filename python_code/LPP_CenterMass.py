@@ -32,26 +32,21 @@ def load_data(doNWPU, doMNIST, doCIFAR10):
     if doMNIST:
         # load the MNIST dataset
         # structure: 
-        #    x_train: list (60000, 28 , 28)
-        #    x_test: list (10000, 28 , 28)
-        #    y_train: list (60000, 1)
-        #    y_test: list (10000, 1)
+        #    x_train: list (60000, 28 , 28) dtype=unit8
+        #    x_test: list (10000, 28 , 28) dtype=unit8
+        #    y_train: list (60000, 1) dtype=unit8
+        #    y_test: list (10000, 1) dtype=unit8
         mnist = tf.keras.datasets.mnist
         (x_train, y_train), (x_test, y_test) = mnist.load_data()
-        x_train = np.array(x_train)
-        y_train = np.array(y_train)
-        x_test = np.array(x_test)
-        y_test = np.array(y_test)
         # preprocess the dataset to fit the format we use
-        # first turn the matrices of x_train and x_test to 28 x 28 = 784 dimensional vectors
-        for i in range(60000):
-            np.reshape(x_train[i], 784)
-        print(x_train[1])
-        for i in range(10000):
-            x_test[i].flatten()
         data = {"x": [], "y": []}
-        data["x"] = x_train + x_test
-        data["y"] = y_train + y_test
+        # first turn the matrices of x_train_pre and x_test_pre to 28 x 28 = 784 dimensional vectors
+        for i in range(60000):
+            data["x"].append(np.reshape(x_train[i], 784))
+            data["y"].append(y_train[i])
+        for i in range(10000):
+            data["x"].append(np.reshape(x_test[i], 784))
+            data["y"].append(y_test[i])
 
     if doCIFAR10:
         # load the CIFAR-10 dataset, data from https://www.cs.toronto.edu/~kriz/cifar.html
@@ -68,7 +63,6 @@ def load_data(doNWPU, doMNIST, doCIFAR10):
         
     return data
     
-
 
 # k-nearest neighbor classfication
 # given test data x and label y, find in a training set (X, Y) the k-nearest points x1,...,xk to x, and classify x as majority vote on y1,...,yk
@@ -102,17 +96,15 @@ def LPP(X, L, D):
     L = np.array(L)
     D = np.array(D)
     # calculate mtx_L = X' * L * X
-    mtx_L = np.matmul(np.matmul(X, L), X.T)
-    print("mtx_L =", mtx_L)
+    mtx_L = np.matmul(np.matmul(X.T, L), X)
     # calculate mtx_D = X' * D * X
-    mtx_D = np.matmul(np.matmul(X, D), X.T)
-    print("mtx_D =", mtx_D)
+    mtx_D = np.matmul(np.matmul(X.T, D), X)
     # solve the generalized eigenvalue problem mtx_L W = LAMBDA mtx_D W
     LAMBDA, W = eigh(mtx_L, mtx_D, eigvals_only=False)
     # sort the eigenvalues in a descending order
     SORT_ORDER, LAMBDA = zip(*sorted(enumerate(LAMBDA), key=itemgetter(1), reverse=True)) 
     # reorder the generalized eigenvector matrix W according to SORT_ORDER
-    W = [W[SORT_ORDER[_]] for _ in range(len(D))]
+    W = [W[SORT_ORDER[_]] for _ in range(len(SORT_ORDER))]
     return W, LAMBDA 
     
  
@@ -192,8 +184,8 @@ def LPP_train(data, d_pre, kd_LPP, kd_PCA, train_size, ht, test_size):
     #   Seq = the LPP frames corresponding to each cluster in data_train, labeling the correponding Grassmann equivalence class
     
     # read the data into inputs and labels
-    data_x = data['x']
-    data_y = data['y']
+    data_x = data["x"]
+    data_y = data["y"]
     data_x = np.array(data_x)
     data_y = np.array(data_y)
     
@@ -202,7 +194,7 @@ def LPP_train(data, d_pre, kd_LPP, kd_PCA, train_size, ht, test_size):
     pca.fit(data_x)
     A0 = pca.components_
     # bulid a given dimensional d_pre embedding of data_x into new data_x, for faster computation only
-    data_x = np.matmul(data_x, np.array([A0[_] for _ in range(d_pre)]))
+    data_x = np.matmul(data_x, np.array([A0[_] for _ in range(d_pre)]).T)
     
     # n_data is the number of samples in data_x dataset, kd_data is the original dimension of each sample
     n_data = len(data_x)
@@ -228,7 +220,7 @@ def LPP_train(data, d_pre, kd_LPP, kd_PCA, train_size, ht, test_size):
     pca.fit(data_train_x)
     A0 = pca.components_
     # bulid a kd_PCA dimensional embedding of data_train in x0
-    x0 = np.matmul(data_train_x, np.array([A0[_] for _ in range(kd_PCA)]))
+    x0 = np.matmul(data_train_x, np.array([A0[_] for _ in range(kd_PCA)]).T)
     # from x0, partition into 2^ht leaf nodes, each leaf node can give samples for a local LPP
     indx, leafs, mbrs = buildVisualWordList(x0, ht)
 
@@ -246,7 +238,7 @@ def LPP_train(data, d_pre, kd_LPP, kd_PCA, train_size, ht, test_size):
             pca.fit(data_train_x_k)
             PCA_k = pca.components_
             PCA_k = Complete_SpecialOrthogonal(PCA_k.T).T
-            data_train_x_k = np.matmul(data_train_x_k, np.array([PCA_k[_] for _ in range(kd_PCA)]))
+            data_train_x_k = np.matmul(data_train_x_k, np.array([PCA_k[_] for _ in range(kd_PCA)]).T)
             # then do LPP for the PCA embedded data_train_x_k and reduce the dimension to kd_LPP
             # construct the supervise affinity matrix S
             between_class_affinity = 0
@@ -257,10 +249,10 @@ def LPP_train(data, d_pre, kd_LPP, kd_PCA, train_size, ht, test_size):
             A_k, LAMBDA = LPP(data_train_x_k, L_k, D_k)
             LPP_k, R = np.linalg.qr(A_k)        
             # obtain the frame Seq(:,:,k)
-            Seq[k] = np.matmul(np.array([PCA_k[_] for _ in range(kd_PCA)]), np.array([LPP_k[_] for _ in range(kd_LPP)]))
+            Seq[k] = np.matmul(np.array([PCA_k[_] for _ in range(kd_PCA)]).T, np.array([LPP_k[_] for _ in range(kd_LPP)]).T)
             print("frame ",k," size=(", len(Seq[k]),",",len(Seq[k][0]), "), Stiefel = ", np.linalg.norm(np.array(np.matmul(Seq[k].T, Seq[k]))-np.array(np.diag(np.ones(kd_LPP)))))
 
-    return data_train, data_test, leafs, Seq
+    return data_train, Seq, leafs, data_test
 
 
 """
@@ -271,38 +263,62 @@ LPP analysis based on Grassmann center of mass calculation
 
 if __name__ == "__main__":
     
-    x = [[1, 2], [3, 4], [5, 6], [7, 8], [9, 10], [11, 12], [13, 14], [15, 16], [17, 18], [19, 20], [21, 22], [23, 24], [25, 26], [27, 28], [29, 30], [31, 32]]
-    ht = 2
-    indx, leafs, mbrs = buildVisualWordList(x, ht)
-    print("leafs=", leafs)
-    print("indx=", indx)
-    print("mbrs=", mbrs)
+    # do test functions developed
+    doruntest=0
+    if doruntest:
+        x = [[1, 2], [3, 4], [5, 6], [7, 8], [9, 10], [11, 12], [13, 14], [15, 16], [17, 18], [19, 20], [21, 22], [23, 24], [25, 26], [27, 28], [29, 30], [31, 32]]
+        ht = 2
+        indx, leafs, mbrs = buildVisualWordList(x, ht)
+        print("leafs=", leafs)
+        print("indx=", indx)
+        print("mbrs=", mbrs)
+        
+        x_test = [0, 0]
+        y_test = 2
+        X_train = [[0, 1], [1, 0], [0, 2], [2, 0], [0, 3], [3, 0]]
+        Y_train = [2, 2, 2, 2, 1, 1]
+        k = 6
+        isclassified = knn(x_test, y_test, X_train, Y_train, k)
+        print("isclassified=", isclassified)
+        
+        S = [[2, 1], [1, 2]]
+        L, D = graph_laplacian(S)
+        print("L=", L, "D=", D)
+        X = np.array([[0, 1], [1, 0]])
+        W, LAMBDA = LPP(X, L, D)
+        print("W=", W)
+        print("LAMBDA=", LAMBDA)
+        
+        X = [[0, 1, 2], [2, 3, 4], [4, 5, 6]]
+        Y = [1, 2, 1]
+        between_class_affinity = 0
+        S = affinity_supervised(X, Y, between_class_affinity)
+        print("S=", S)
     
-    x_test = [0, 0]
-    y_test = 2
-    X_train = [[0, 1], [1, 0], [0, 2], [2, 0], [0, 3], [3, 0]]
-    Y_train = [2, 2, 2, 2, 1, 1]
-    k = 6
-    isclassified = knn(x_test, y_test, X_train, Y_train, k)
-    print("isclassified=", isclassified)
-    
-    S = [[2, 1], [1, 2]]
-    L, D = graph_laplacian(S)
-    print("L=", L, "D=", D)
-    X = np.array([[0, 1], [1, 0]])
-    W, LAMBDA = LPP(X, L, D)
-    print("W=", W)
-    print("LAMBDA=", LAMBDA)
-    
-    X = [[0, 1, 2], [2, 3, 4], [4, 5, 6]]
-    Y = [1, 2, 1]
-    between_class_affinity = 0
-    S = affinity_supervised(X, Y, between_class_affinity)
-    print("S=", S)
-    
+    # do the LPP analysis on different datasets
     dorunfile = 1
+    # select which dataset to work on
     doNWPU = 0
     doMNIST = 1 
     doCIFAR10 = 0
+    
     if dorunfile:
+        # load data
         data = load_data(doNWPU, doMNIST, doCIFAR10)
+        # the data preprocessing projection dimension
+        d_pre = 256
+        # the PCA embedding dimension = kd_PCA
+        kd_PCA = 64
+        # the LPP embedding dimension = kd_LPP
+        kd_LPP = 16
+        # train_size = the training data size
+        train_size = 100*(2**9)
+        # ht = the partition tree height
+        ht = 9
+        # test_size = the test data size
+        test_size = 100
+
+        # obtain the train, test sets in nwpu and the LPP frames Seq(:,:,k) for each cluster with indexes in leafs
+        data_train, Seq, leafs, data_test = LPP_train(data, d_pre, kd_LPP, kd_PCA, train_size, ht, test_size)
+
+        print(len(Seq[0]), len(Seq[0][0]))
