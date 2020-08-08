@@ -16,6 +16,58 @@ import pandas as pd
 from scipy.linalg import eigh
 from scipy.spatial.distance import cdist
 from sklearn.decomposition import PCA
+import tensorflow as tf
+
+
+# load the data set, nwpu-aerial-images, MNIST or CIFAR-10
+def load_data(doNWPU, doMNIST, doCIFAR10):
+    
+    if doNWPU:
+        # load the nwpu-aerial-images dataset
+        # structure: 
+        #   x: [31500×4096 double]
+        #   y: [31500×1 double]
+        data = {"x": [0], "y": [1]}
+
+    if doMNIST:
+        # load the MNIST dataset
+        # structure: 
+        #    x_train: list (60000, 28 , 28)
+        #    x_test: list (10000, 28 , 28)
+        #    y_train: list (60000, 1)
+        #    y_test: list (10000, 1)
+        mnist = tf.keras.datasets.mnist
+        (x_train, y_train), (x_test, y_test) = mnist.load_data()
+        x_train = np.array(x_train)
+        y_train = np.array(y_train)
+        x_test = np.array(x_test)
+        y_test = np.array(y_test)
+        # preprocess the dataset to fit the format we use
+        # first turn the matrices of x_train and x_test to 28 x 28 = 784 dimensional vectors
+        for i in range(60000):
+            np.reshape(x_train[i], 784)
+        print(x_train[1])
+        for i in range(10000):
+            x_test[i].flatten()
+        data = {"x": [], "y": []}
+        data["x"] = x_train + x_test
+        data["y"] = y_train + y_test
+
+    if doCIFAR10:
+        # load the CIFAR-10 dataset, data from https://www.cs.toronto.edu/~kriz/cifar.html
+        # structure: 
+            # each cifar10_k, k=1,...,5
+            #          data: [10000×3072 uint8]
+            #        labels: [10000×1 uint8]
+            #   batch_label: 'training batch k of 5'
+            # cifar10_test
+            #          data: [10000×3072 uint8]
+            #        labels: [10000×1 uint8]
+            #   batch_label: 'testing batch 1 of 1'
+        data = {"x": [0], "y": [1]}
+        
+    return data
+    
 
 
 # k-nearest neighbor classfication
@@ -248,3 +300,9 @@ if __name__ == "__main__":
     S = affinity_supervised(X, Y, between_class_affinity)
     print("S=", S)
     
+    dorunfile = 1
+    doNWPU = 0
+    doMNIST = 1 
+    doCIFAR10 = 0
+    if dorunfile:
+        data = load_data(doNWPU, doMNIST, doCIFAR10)
