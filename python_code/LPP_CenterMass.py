@@ -324,18 +324,14 @@ if __name__ == "__main__":
         # obtain the train, test sets in nwpu and the LPP frames Seq(:,:,k) for each cluster with indexes in leafs
         data_train, Seq, leafs, data_test = LPP_train(data, d_pre, kd_LPP, kd_PCA, train_size, ht, test_size)
 
-        print(len(data_train["x"]), len(data_train["x"][0]))
-        print(len(data_test["x"]), len(data_test["x"][0]))
-        print(len(Seq[0]), len(Seq[0][0]))
-    
-#   % all these LPP Stiefel frames are on St(n, p)
-#   n = size(Seq, 1);
-#   p = size(Seq, 2);
-#
-#   % data original dimension kd_data
-#   kd_data = size(data_train.x, 2);
-#   
-#   % find m_1, ..., m_{2^{ht}}, the means of the chosen clusters
+        # all these LPP Stiefel frames are on St(n, p)
+        n = len(Seq[0])
+        p = len(Seq[0][0])
+        
+        # data original dimension kd_data
+        kd_data = len(data_train["x"][0])
+        
+        # find m_1, ..., m_{2^{ht}}, the means of the chosen clusters
 #   m = zeros(kd_data, 2^ht);
 #   for k=1:2^ht 
 #       m(:, k) = mean(data_train.x(leafs{k}, :), 1);
