@@ -97,7 +97,7 @@ def buildVisualWordList(x, ht):
             offs[2*k+1-1]   = [offs_k[_] for _ in soffs[moffs+1+1-1:nk]] 
             
             # prompt
-            print("\n split [", k, ":", nk, "] at", d_cut, ": ", sv[moffs]) 
+            print("split [", k+1, ":", nk, "] at", d_cut, ": ", sv[moffs]) 
                 
             # clean up node k
             offs[k-1] = []
@@ -125,8 +125,8 @@ testing buildVisualWordList
 
 if __name__ == "__main__":
     
-    x = [[1, 2], [3, 4], [5, 6], [7, 8], [9, 10], [11, 12], [13, 14], [15, 16], [17, 18], [19, 20], [21, 22], [23, 24], [25, 26], [27, 28], [29, 30], [31, 32]]
-    ht = 2
+    x = [[2, 1], [4, 3], [5, 6], [8, 7], [9, 10], [12, 11], [13, 14], [16, 15], [17, 18], [20, 19], [21, 22], [24, 23], [25, 26], [28, 27], [30, 29], [31, 32]]
+    ht = 3
     indx, leafs, mbrs = buildVisualWordList(x, ht)
     print("leafs=", leafs)
     print("indx=", indx)
