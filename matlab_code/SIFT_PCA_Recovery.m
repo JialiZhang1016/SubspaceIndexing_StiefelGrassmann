@@ -18,7 +18,9 @@ test_size = 500;
 
 %set the sequence of interpolation numbers and the threshold ratio for determining the interpolation number
 interpolation_number_seq = ones(test_size, 1);
-ratio_threshold = 1.001;
+ratio_threshold = 2; % the ratio for determinining the interpolation_number, serve as a tuning parameter
+ratio_seq = zeros(test_size, 2); % the sequence of second smallest (or largest) to-center distance over smallest to-center distance, for tuning ratio_threshold
+
 
 %First sample a training dataset sift_train from the SIFT data set
 %Set the partition tree depth = ht
@@ -64,7 +66,7 @@ error_bm = zeros(test_size, 1); %recovery errors for the nearest frame, benchmar
 error_c = zeros(test_size, 1);  %recovery errors using the Stiefel center method
 
 doEuclideanCenter = 1; %do or do not do Euclidean center of mass
-doGD = 0; %do or do not do GD for finding Euclidean center of mass
+doGD = 1; %do or do not do GD for finding Euclidean center of mass
 
 tic;
 for test_index=1:test_size
@@ -73,9 +75,12 @@ for test_index=1:test_size
     %sort the cluster centers m_1, ..., m_{2^{ht}} by ascending distances to x 
     dist = zeros(2^ht, 1);
     for k=1:2^ht
-        dist(k) = norm(x-m(:, k));
+        dist(k) = norm(x'-m(:, k));
     end
     [dist_sort, indexes] = sort(dist, 1, 'ascend');
+    fprintf("ratio between [%f, %f]\n", dist_sort(2)/dist_sort(1), dist_sort(2^ht)/dist_sort(1));
+    ratio_seq(test_index, 1) = dist_sort(2)/dist_sort(1);
+    ratio_seq(test_index, 2) = dist_sort(2^ht)/dist_sort(1);
     %count the number of St(p, n) interpolation clusters for current test point x
     %interpolation_number = number of frames used for interpolation between cluster PCA frames
     interpolation_number = 1;
@@ -211,7 +216,7 @@ function [sift_train, Seq, leafs, sift_test] = SIFT_PCA_train(kd_siftStiefel, tr
 %        sifts: [10068850×128 uint8]
 %    sift_offs: [1×33590 double]
 
-load ~/文档/work_SubspaceIndexingStiefleGrassmann/Code_Subspace_indexing_Stiefel_Grassman/DATA_cdvs-sift300-dataset.mat sifts
+load ~/Documents/Code_Subspace_indexing_Stiefel_Grassman/DATA_cdvs-sift300-dataset.mat sifts
 
 %n_sift=10068850 is the number of samples in sifts dataset, kd_sift is the original dimension of each sample
 %kd_sift=128

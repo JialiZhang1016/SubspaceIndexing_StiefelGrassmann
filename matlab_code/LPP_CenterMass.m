@@ -8,13 +8,13 @@ clear classes;
 %rng(1, 'twister');
 
 
-doNWPU = 0;
+doNWPU = 1;
 if doNWPU
 % load the nwpu-aerial-images dataset
 % structure: 
 %   x: [31500×4096 double]
 %   y: [31500×1 double]
-data = load('~/文档/work_SubspaceIndexingStiefleGrassmann/Code_Subspace_indexing_Stiefel_Grassman/DATA_nwpu-aerial-images.mat');
+data = load('~/Documents/Code_Subspace_indexing_Stiefel_Grassman/DATA_nwpu-aerial-images.mat');
 end
 
 
@@ -26,14 +26,14 @@ if doMNIST
 %    testY: [1×10000 uint8]
 %    trainY: [1×60000 uint8]
 %    trainX: [60000×784 uint8]
-mnist = load('~/文档/work_SubspaceIndexingStiefleGrassmann/Code_Subspace_indexing_Stiefel_Grassman/DATA_mnist.mat');
+mnist = load('~/Documents/Code_Subspace_indexing_Stiefel_Grassman/DATA_mnist.mat');
 % preprocess the dataset to fit the format we use
 data.x = double(vertcat(mnist.trainX, mnist.testX));
 data.y = double(vertcat(mnist.trainY', mnist.testY'));
 end
 
 
-doCIFAR10 = 1;
+doCIFAR10 = 0;
 if doCIFAR10
 % load the CIFAR-10 dataset, data from https://www.cs.toronto.edu/~kriz/cifar.html
 % structure: 
@@ -45,12 +45,12 @@ if doCIFAR10
 %          data: [10000×3072 uint8]
 %        labels: [10000×1 uint8]
 %   batch_label: 'testing batch 1 of 1'    
-cifar10(1) = load('~/文档/work_SubspaceIndexingStiefleGrassmann/Code_Subspace_indexing_Stiefel_Grassman/DATA_cifar10/data_batch_1.mat');
-cifar10(2) = load('~/文档/work_SubspaceIndexingStiefleGrassmann/Code_Subspace_indexing_Stiefel_Grassman/DATA_cifar10/data_batch_2.mat');
-cifar10(3) = load('~/文档/work_SubspaceIndexingStiefleGrassmann/Code_Subspace_indexing_Stiefel_Grassman/DATA_cifar10/data_batch_3.mat');
-cifar10(4) = load('~/文档/work_SubspaceIndexingStiefleGrassmann/Code_Subspace_indexing_Stiefel_Grassman/DATA_cifar10/data_batch_4.mat');
-cifar10(5) = load('~/文档/work_SubspaceIndexingStiefleGrassmann/Code_Subspace_indexing_Stiefel_Grassman/DATA_cifar10/data_batch_5.mat');
-cifar10(6) = load('~/文档/work_SubspaceIndexingStiefleGrassmann/Code_Subspace_indexing_Stiefel_Grassman/DATA_cifar10/test_batch.mat');
+cifar10(1) = load('~/Documents/Code_Subspace_indexing_Stiefel_Grassman/DATA_cifar10/data_batch_1.mat');
+cifar10(2) = load('~/Documents/Code_Subspace_indexing_Stiefel_Grassman/DATA_cifar10/data_batch_2.mat');
+cifar10(3) = load('~/Documents/Code_Subspace_indexing_Stiefel_Grassman/DATA_cifar10/data_batch_3.mat');
+cifar10(4) = load('~/Documents/Code_Subspace_indexing_Stiefel_Grassman/DATA_cifar10/data_batch_4.mat');
+cifar10(5) = load('~/Documents/Code_Subspace_indexing_Stiefel_Grassman/DATA_cifar10/data_batch_5.mat');
+cifar10(6) = load('~/Documents/Code_Subspace_indexing_Stiefel_Grassman/DATA_cifar10/test_batch.mat');
 % preprocess the dataset to fit the format we use
 d_prepre = 784;
 for i = 1:6
@@ -76,9 +76,9 @@ kd_PCA = 64;
 % the LPP embedding dimension = kd_LPP
 kd_LPP = 16;
 % train_size = the training data size
-train_size = 100*2^9;
+train_size = 3*2^13;
 % ht = the partition tree height
-ht = 9;
+ht = 13;
 % test_size = the test data size
 test_size = 100;
 
@@ -100,17 +100,20 @@ end
 
 % set the sequence of interpolation numbers and the threshold ratio for determining the interpolation number
 interpolation_number_seq = ones(test_size, 1);
-ratio_threshold = 1.001;
+ratio_threshold = 1.15; % the ratio for determinining the interpolation_number, serve as a tuning parameter
+ratio_seq = zeros(test_size, 2); % the sequence of second smallest (or largest) to-center distance over smallest to-center distance, for tuning ratio_threshold
+
 
 K = 1e-8; % the scaling coefficient for calculating the weights w = e^{-K distance^2}
-k_nearest_neighbor = 80; % the parameter k for k-nearest-neighbor classification
+k_nearest_neighbor = 1; % the parameter k for k-nearest-neighbor classification
 
 classified_bm = zeros(test_size, 1); % list of classified/not classified projections for using the nearest frame, benchmark
 classified_c = zeros(test_size, 1);  % list of classified/not classified projections for using the Grassmann center method
 
-doGrassmannpFCenter = 1; % do or do not do projected Frobenius center of mass for Grassmannian frame
-doStiefelEuclidCenter = 0; % do or do not do Euclid center of mass for Stiefel frame 
+doGrassmannpFCenter = 0; % do or do not do projected Frobenius center of mass for Grassmannian frame
+doStiefelEuclidCenter = 1; % do or do not do Euclid center of mass for Stiefel frame 
 doGD = 0; % do or do not do GD for finding projected Frobenius center of mass
+
 
 tic;
 for test_index=1:test_size
@@ -120,9 +123,12 @@ for test_index=1:test_size
     % sort the cluster centers m_1, ..., m_{2^{ht}} by ascending distances to x 
     dist = zeros(2^ht, 1);
     for k=1:2^ht
-        dist(k) = norm(x-m(:, k));
+        dist(k) = norm(x'-m(:, k));
     end
     [dist_sort, indexes] = sort(dist, 1, 'ascend');
+    fprintf("ratio between [%f, %f]\n", dist_sort(2)/dist_sort(1), dist_sort(2^ht)/dist_sort(1));
+    ratio_seq(test_index, 1) = dist_sort(2)/dist_sort(1);
+    ratio_seq(test_index, 2) = dist_sort(2^ht)/dist_sort(1);
     % count the number of St(p, n) interpolation clusters for current test point x
     % interpolation_number = number of frames used for interpolation between cluster LDA frames
     interpolation_number = 1;
