@@ -17,6 +17,7 @@ from scipy.linalg import eigh
 from scipy.spatial.distance import cdist
 from sklearn.decomposition import PCA
 import tensorflow as tf
+import time
 
 
 # load the data set, nwpu-aerial-images, MNIST or CIFAR-10
@@ -338,7 +339,7 @@ if __name__ == "__main__":
 
         # set the sequence of interpolation numbers and the threshold ratio for determining the interpolation number
         interpolation_number_seq = np.ones(test_size)
-        ratio_threshold = 1.001
+        ratio_threshold = 1.1
    
         K = 1e-8 # the scaling coefficient for calculating the weights w = e^{-K distance^2}
         k_nearest_neighbor = 80 # the parameter k for k-nearest-neighbor classification
@@ -350,45 +351,38 @@ if __name__ == "__main__":
         doStiefelEuclidCenter = 1 # do or do not do Euclid center of mass for Stiefel frame 
         doGD = 0 # do or do not do GD for finding projected Frobenius center of mass
    
-#   tic;
-#   for test_index=1:test_size
-#        fprintf("\ntest point %d -----------------------------------------------------------\n", test_index);
-#        x = data_test.x(test_index, :);
-#        y = data_test.y(test_index);
-#        % sort the cluster centers m_1, ..., m_{2^{ht}} by ascending distances to x 
-#        dist = zeros(2^ht, 1);
-#        for k=1:2^ht
-#            dist(k) = norm(x-m(:, k));
-#        end
-#        [dist_sort, indexes] = sort(dist, 1, 'ascend');
-#        % count the number of St(p, n) interpolation clusters for current test point x
-#        % interpolation_number = number of frames used for interpolation between cluster LDA frames
-#        interpolation_number = 1;
-#        for k=2:2^ht
-#            if dist_sort(k) <= ratio_threshold * dist_sort(1)
-#                interpolation_number = interpolation_number + 1;
-#            else
-#                break;
-#            end    
-#        end
-#        fprintf("interpolation number = %d\n", interpolation_number);
-#        % record the sequence of all interpolation numbers for each test point x
-#        interpolation_number_seq(test_index) = interpolation_number;
-#        % find the LPP Stiefel projection frames A_k1, ..., A_k{interpolation_number} for the first (interpolation_number) closest clusters to x
-#        frames = zeros(kd_data, kd_LPP, interpolation_number);
-#        for i=1:interpolation_number
-#            frames(:, :, i) = Seq(:, :, indexes(i));
-#            end
-#            % find the weights w_1, ..., w_{interpolation_number} for the first (interpolation_number) closest clusters to x
-#            w = zeros(interpolation_number, 1);
-#        for i=1:interpolation_number
-#            w(i) = exp(- K * (dist_sort(i))^2);
-#        end
-#        % collect all indexes in clusters corresponding to the first (interpolation_number) closest clusters to x
-#        aggregate_cluster = [];
-#        for i=1:interpolation_number
-#            aggregate_cluster = union(aggregate_cluster, leafs{indexes(i)});
-#        end
+        cpu_time_start = time.process_time()
+        for test_index in range(test_size):
+            print("\ntest point", test_index+1, " -----------------------------------------------------------\n")
+            x = data_test["x"][test_index]
+            #print("norm x = ", np.linalg.norm(x))
+            y = data_test["y"][test_index]
+            # sort the cluster centers m_1, ..., m_{2^{ht}} by ascending distances to x 
+            dist = [np.linalg.norm(x-m[k]) for k in range(2**ht)]
+            indexes, dist_sort = zip(*sorted(enumerate(dist), key=itemgetter(1))) 
+            # count the number of St(p, n) interpolation clusters for current test point x
+            # interpolation_number = number of frames used for interpolation between cluster LDA frames
+            interpolation_number = 1
+            #print("diatances = ", dist_sort[1], " and ", dist_sort[0], "and", dist_sort[2**ht-1], " ratio=", dist_sort[1]/dist_sort[0])
+            for k in range(1, 2**ht):
+                if dist_sort[k] <= ratio_threshold * dist_sort[0]:
+                    interpolation_number = interpolation_number + 1
+                else:
+                    break
+            print("interpolation number = ", interpolation_number)
+            # record the sequence of all interpolation numbers for each test point x
+            interpolation_number_seq[test_index] = interpolation_number
+            # find the LPP Stiefel projection frames A_k1, ..., A_k{interpolation_number} for the first (interpolation_number) closest clusters to x
+            frames = np.zeros((interpolation_number, kd_data, kd_LPP))
+            for i in range(interpolation_number):
+                frames[i] = Seq[indexes[i]]
+            # find the weights w_1, ..., w_{interpolation_number} for the first (interpolation_number) closest clusters to x
+            w = [np.exp(-K * (dist_sort[i]**2)) for i in range(interpolation_number)]
+            # collect all indexes in clusters corresponding to the first (interpolation_number) closest clusters to x
+            aggregate_cluster = []
+            for i in range(interpolation_number):
+                aggregate_cluster = list(set(aggregate_cluster) | set(leafs[indexes[i]]))
+            #print("aggregate_cluster=", aggregate_cluster)
 #        % project x to A1 x and classify it using k-nearest-neighbor on the projection via A1 of the closest cluster
 #        x_test = x * frames(:,:,1);
 #        y_test = y;
@@ -433,6 +427,7 @@ if __name__ == "__main__":
 #        % output the result
 #        fprintf("benchmark classified = %d, center mass classfied = %d\n", isclassified_bm, isclassified_c);
 #        end
-#    toc;
-#
-#    fprintf("benchmark correct classification rate = %f %%, center mass correct classification rate = %f %%\n", (sum(classified_bm)/test_size)*100, (sum(classified_c)/test_size)*100);
+        cpu_time_end = time.process_time()
+        print("\n******************** CONCLUSION ********************")
+        print("\ncpu runtime for testing = ", cpu_time_end - cpu_time_start, " seconds \n")
+        print("\nbenchmark correct classification rate = ", (sum(classified_bm)/test_size)*100, "%, center mass correct classification rate =", (sum(classified_c)/test_size)*100, "%\n")
