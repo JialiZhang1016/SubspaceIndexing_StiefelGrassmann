@@ -332,25 +332,24 @@ if __name__ == "__main__":
         kd_data = len(data_train["x"][0])
         
         # find m_1, ..., m_{2^{ht}}, the means of the chosen clusters
-#   m = zeros(kd_data, 2^ht);
-#   for k=1:2^ht 
-#       m(:, k) = mean(data_train.x(leafs{k}, :), 1);
-#   end
-#
-#   % set the sequence of interpolation numbers and the threshold ratio for determining the interpolation number
-#   interpolation_number_seq = ones(test_size, 1);
-#   ratio_threshold = 1.001;
-#   
-#   K = 1e-8; % the scaling coefficient for calculating the weights w = e^{-K distance^2}
-#   k_nearest_neighbor = 80; % the parameter k for k-nearest-neighbor classification
-#   
-#   classified_bm = zeros(test_size, 1); % list of classified/not classified projections for using the nearest frame, benchmark
-#   classified_c = zeros(test_size, 1);  % list of classified/not classified projections for using the Grassmann center method
-#   
-#   doGrassmannpFCenter = 1; % do or do not do projected Frobenius center of mass for Grassmannian frame
-#   doStiefelEuclidCenter = 0; % do or do not do Euclid center of mass for Stiefel frame 
-#   doGD = 0; % do or do not do GD for finding projected Frobenius center of mass
-#   
+        m = np.zeros((2**ht, kd_data))
+        for k in range(2**ht):
+            m[k] = np.mean([data_train["x"][_] for _ in leafs[k]], axis=0)
+
+        # set the sequence of interpolation numbers and the threshold ratio for determining the interpolation number
+        interpolation_number_seq = np.ones(test_size)
+        ratio_threshold = 1.001
+   
+        K = 1e-8 # the scaling coefficient for calculating the weights w = e^{-K distance^2}
+        k_nearest_neighbor = 80 # the parameter k for k-nearest-neighbor classification
+   
+        classified_bm = np.zeros(test_size) # list of classified/not classified projections for using the nearest frame, benchmark
+        classified_c = np.zeros(test_size) # list of classified/not classified projections for using the Grassmann center method
+   
+        doGrassmannpFCenter = 0 # do or do not do projected Frobenius center of mass for Grassmannian frame
+        doStiefelEuclidCenter = 1 # do or do not do Euclid center of mass for Stiefel frame 
+        doGD = 0 # do or do not do GD for finding projected Frobenius center of mass
+   
 #   tic;
 #   for test_index=1:test_size
 #        fprintf("\ntest point %d -----------------------------------------------------------\n", test_index);
