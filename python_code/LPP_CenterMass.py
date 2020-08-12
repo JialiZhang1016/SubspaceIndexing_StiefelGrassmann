@@ -383,50 +383,47 @@ if __name__ == "__main__":
             for i in range(interpolation_number):
                 aggregate_cluster = list(set(aggregate_cluster) | set(leafs[indexes[i]]))
             #print("aggregate_cluster=", aggregate_cluster)
-#        % project x to A1 x and classify it using k-nearest-neighbor on the projection via A1 of the closest cluster
-#        x_test = x * frames(:,:,1);
-#        y_test = y;
-#        X_train = data_train.x(leafs{indexes(1)}, :) * frames(:,:,1);
-#        Y_train = data_train.y(leafs{indexes(1)});
-#        isclassified_bm = knn(x_test, y_test, X_train, Y_train, k_nearest_neighbor);
-#        classified_bm(test_index) = isclassified_bm;
-#        % calculate the center of mass for the (interpolation_number) nearest cluster LPP frames with respect to weights w 
-#        threshold_gradnorm = 1e-4;
-#        threshold_fixedpoint = 1e-4;
-#        threshold_checkonGrassmann = 1e-10;
-#        threshold_checkonStiefel = 1e-10;
-#        threshold_logStiefel = 1e-4;
-#        if doGrassmannpFCenter
-#            % do Grassmann center of mass method
-#            GrassmannOpt = Grassmann_Optimization(w, frames, threshold_gradnorm, threshold_fixedpoint, threshold_checkonGrassmann);
-#            if doGD
-#                break;
-#            else
-#                [center, value, grad] = GrassmannOpt.Center_Mass_pFrobenius;
-#            end
-#        else
-#            % do Stiefel center of mass method
-#            StiefelOpt = Stiefel_Optimization(w, frames, threshold_gradnorm, threshold_fixedpoint, threshold_checkonStiefel, threshold_logStiefel);
-#            if doStiefelEuclidCenter
-#                if doGD
-#                    break;
-#                else
-#                    [center, value, gradnorm] = StiefelOpt.Center_Mass_Euclid;
-#                end
-#            else
-#                break;
-#            end
-#        end
-#        % project x to center x and classify it using k-nearest-neighbor on the projection via center of all (interpolation number) clusters
-#        x_test = x * center;
-#        y_test = y;
-#        X_train = data_train.x(aggregate_cluster, :) * center;
-#        Y_train = data_train.y(aggregate_cluster);    
-#        isclassified_c = knn(x_test, y_test, X_train, Y_train, k_nearest_neighbor);
-#        classified_c(test_index) = isclassified_c;
-#        % output the result
-#        fprintf("benchmark classified = %d, center mass classfied = %d\n", isclassified_bm, isclassified_c);
-#        end
+            # project x to A1 x and classify it using k-nearest-neighbor on the projection via A1 of the closest cluster
+            x_test = np.matmul(x, frames[0])
+            y_test = y
+            X_train = [np.matmul(data_train["x"][_],  frames[0]) for _ in leafs[indexes[0]]]
+            Y_train = [data_train["y"][_] for _ in leafs[indexes[0]]]
+            isclassified_bm = knn(x_test, y_test, X_train, Y_train, k_nearest_neighbor)
+            classified_bm[test_index] = isclassified_bm
+            # calculate the center of mass for the (interpolation_number) nearest cluster LPP frames with respect to weights w 
+            threshold_gradnorm = 1e-4
+            threshold_fixedpoint = 1e-4
+            threshold_checkonGrassmann = 1e-10
+            threshold_checkonStiefel = 1e-10
+            threshold_logStiefel = 1e-4
+            if doGrassmannpFCenter:
+                # do Grassmann center of mass method
+                GrassmannOpt = Grassmann_Optimization(w, frames, threshold_gradnorm, threshold_fixedpoint, threshold_checkonGrassmann)
+                if doGD:
+                     break
+                else:
+                    center, value, grad = GrassmannOpt.Center_Mass_pFrobenius()
+            else:
+                # do Stiefel center of mass method
+                StiefelOpt = Stiefel_Optimization(w, frames, threshold_gradnorm, threshold_fixedpoint, threshold_checkonStiefel, threshold_logStiefel)
+                if doStiefelEuclidCenter:
+                    if doGD:
+                        break
+                    else:
+                        center, value, gradnorm = StiefelOpt.Center_Mass_Euclid()
+                else:
+                    break
+            # project x to center x and classify it using k-nearest-neighbor on the projection via center of all (interpolation number) clusters
+            x_test = np.matmul(x , center)
+            y_test = y
+            X_train = [np.matmul(data_train["x"][_], center) for _ in aggregate_cluster]
+            Y_train = [data_train["y"][_] for _ in aggregate_cluster]    
+            isclassified_c = knn(x_test, y_test, X_train, Y_train, k_nearest_neighbor)
+            classified_c[test_index] = isclassified_c
+            # output the result
+            print("benchmark classified = ",  isclassified_bm, " center mass classfied =", isclassified_c)
+
+        # summarize the final result
         cpu_time_end = time.process_time()
         print("\n******************** CONCLUSION ********************")
         print("\ncpu runtime for testing = ", cpu_time_end - cpu_time_start, " seconds \n")
