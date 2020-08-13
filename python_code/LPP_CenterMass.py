@@ -41,7 +41,7 @@ def load_data(doNWPU, doMNIST, doCIFAR10):
         (x_train, y_train), (x_test, y_test) = mnist.load_data()
         # preprocess the dataset to fit the format we use
         data = {"x": [], "y": []}
-        # first turn the matrices of x_train_pre and x_test_pre to 28 x 28 = 784 dimensional vectors
+        # first turn the matrices of x_train and x_test to 28 x 28 = 784 dimensional vectors
         for i in range(60000):
             data["x"].append(np.reshape(x_train[i], 784))
             data["y"].append(y_train[i])
@@ -50,18 +50,24 @@ def load_data(doNWPU, doMNIST, doCIFAR10):
             data["y"].append(y_test[i])
 
     if doCIFAR10:
-        # load the CIFAR-10 dataset, data from https://www.cs.toronto.edu/~kriz/cifar.html
+        # load the CIFAR-10 dataset
         # structure: 
-            # each cifar10_k, k=1,...,5
-            #          data: [10000×3072 uint8]
-            #        labels: [10000×1 uint8]
-            #   batch_label: 'training batch k of 5'
-            # cifar10_test
-            #          data: [10000×3072 uint8]
-            #        labels: [10000×1 uint8]
-            #   batch_label: 'testing batch 1 of 1'
-        data = {"x": [0], "y": [1]}
-        
+        # structure: 
+        #    x_train: list (50000, 32 , 32, 3) dtype=unit8
+        #    x_test: list (10000, 32 , 32, 3) dtype=unit8
+        #    y_train: list (50000, 1) dtype=unit8
+        #    y_test: list (10000, 1) dtype=unit8
+        cifar10 = tf.keras.datasets.cifar10
+        (x_train, y_train), (x_test, y_test) = cifar10.load_data()
+        # preprocess the dataset to fit the format we use
+        data = {"x": [], "y": []}
+        # first turn the matrices of x_train and x_test to 32 x 32 x 3 = 3072 dimensional vectors
+        for i in range(50000):
+            data["x"].append(np.reshape(x_train[i], 3072))
+            data["y"].append(y_train[i][0])
+        for i in range(10000):
+            data["x"].append(np.reshape(x_test[i], 3072))
+            data["y"].append(y_test[i][0])
     return data
 
 
@@ -303,8 +309,8 @@ if __name__ == "__main__":
     dorunfile = 1
     # select which dataset to work on
     doNWPU = 0
-    doMNIST = 1 
-    doCIFAR10 = 0
+    doMNIST = 0
+    doCIFAR10 = 1
     
     if dorunfile:
         # load data
@@ -320,7 +326,7 @@ if __name__ == "__main__":
         # ht = the partition tree height
         ht = 9
         # test_size = the test data size
-        test_size = 100
+        test_size = 1000
 
         # obtain the train, test sets in nwpu and the LPP frames Seq(:,:,k) for each cluster with indexes in leafs
         data_train, Seq, leafs, data_test = LPP_train(data, d_pre, kd_LPP, kd_PCA, train_size, ht, test_size)
