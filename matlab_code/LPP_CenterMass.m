@@ -8,7 +8,7 @@ clear classes;
 %rng(1, 'twister');
 
 
-doNWPU = 1;
+doNWPU = 0;
 if doNWPU
 % load the nwpu-aerial-images dataset
 % structure: 
@@ -18,7 +18,7 @@ data = load('~/Documents/Code_Subspace_indexing_Stiefel_Grassman/DATA_nwpu-aeria
 end
 
 
-doMNIST = 0;
+doMNIST = 1;
 if doMNIST
 % load the MNIST dataset
 % structure: 
@@ -70,17 +70,17 @@ end
 
 
 % the data preprocessing projection dimension
-d_pre = 256;
+d_pre = 784;
 % the PCA embedding dimension = kd_PCA
 kd_PCA = 64;
 % the LPP embedding dimension = kd_LPP
 kd_LPP = 16;
 % train_size = the training data size
-train_size = 3*2^13;
+train_size = 6*2^13;
 % ht = the partition tree height
 ht = 13;
 % test_size = the test data size
-test_size = 100;
+test_size = 1000;
 
 % obtain the train, test sets in nwpu and the LPP frames Seq(:,:,k) for each cluster with indexes in leafs
 [data_train, Seq, leafs, data_test] = LPP_train(data, d_pre, kd_LPP, kd_PCA, train_size, ht, test_size);
@@ -100,13 +100,15 @@ end
 
 % set the sequence of interpolation numbers and the threshold ratio for determining the interpolation number
 interpolation_number_seq = ones(test_size, 1);
-ratio_threshold = 1.15; % the ratio for determinining the interpolation_number, serve as a tuning parameter
+ratio_threshold = 1.1; % the ratio for determinining the interpolation_number, serve as a tuning parameter
 ratio_seq = zeros(test_size, 2); % the sequence of second smallest (or largest) to-center distance over smallest to-center distance, for tuning ratio_threshold
 
 
 K = 1e-8; % the scaling coefficient for calculating the weights w = e^{-K distance^2}
 k_nearest_neighbor = 1; % the parameter k for k-nearest-neighbor classification
 
+classified_o = zeros(test_size, 1); % list of classified/not classified projections for using the original data point and nearest cluster
+classified_agg_o = zeros(test_size, 1); % list of classified/not classified projections for using the original data point and nearest (interpolation_number) clusters
 classified_bm = zeros(test_size, 1); % list of classified/not classified projections for using the nearest frame, benchmark
 classified_c = zeros(test_size, 1);  % list of classified/not classified projections for using the Grassmann center method
 
@@ -157,6 +159,20 @@ for test_index=1:test_size
     for i=1:interpolation_number
         aggregate_cluster = union(aggregate_cluster, leafs{indexes(i)});
     end
+    % do k-nearest-neighbor classification based on the closest cluster to x, in original space
+    x_test = x;
+    y_test = y;
+    X_train = data_train.x(leafs{indexes(1)}, :);
+    Y_train = data_train.y(leafs{indexes(1)});
+    isclassified_o = knn(x_test, y_test, X_train, Y_train, k_nearest_neighbor);
+    classified_o(test_index) = isclassified_o;
+    % do k-nearest-neighbor classification based on the (interpolation_number) nearest clusters to x, in oroginal space
+    x_test = x;
+    y_test = y;
+    X_train = data_train.x(aggregate_cluster, :);
+    Y_train = data_train.y(aggregate_cluster);
+    isclassified_agg_o = knn(x_test, y_test, X_train, Y_train, k_nearest_neighbor);
+    classified_agg_o(test_index) = isclassified_agg_o;
     % project x to A1 x and classify it using k-nearest-neighbor on the projection via A1 of the closest cluster
     x_test = x * frames(:,:,1);
     y_test = y;
@@ -199,11 +215,11 @@ for test_index=1:test_size
     isclassified_c = knn(x_test, y_test, X_train, Y_train, k_nearest_neighbor);
     classified_c(test_index) = isclassified_c;
     % output the result
-    fprintf("benchmark classified = %d, center mass classfied = %d\n", isclassified_bm, isclassified_c);
+    fprintf("original dimension classified = %d, original dimension aggregate classified = %d, benchmark classified = %d, center mass classfied = %d\n", isclassified_o, isclassified_agg_o, isclassified_bm, isclassified_c);
 end
 toc;
 
-fprintf("benchmark correct classification rate = %f %%, center mass correct classification rate = %f %%\n", (sum(classified_bm)/test_size)*100, (sum(classified_c)/test_size)*100);
+fprintf("original dimension classification rate = %f %%, original dimension aggregate classification rate = %f %%, benchmark correct classification rate = %f %%, center mass correct classification rate = %f %%\n", (sum(classified_o)/test_size)*100, (sum(classified_agg_o)/test_size)*100, (sum(classified_bm)/test_size)*100, (sum(classified_c)/test_size)*100);
 
 
 
