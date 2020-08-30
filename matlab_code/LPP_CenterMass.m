@@ -257,7 +257,7 @@ function [data_train, leafs, data_test] = LPP_ObtainData(data_original_train, da
 %   kd_LPP = the LPP embedding dimension 
 %   train_size, test_size = the training/testing data set size
 %   ht = the partition tree height
-% Output:81
+% Output:
 %   data_train, data_test = the training/testing data set , size is traing_size/test_size
 %   leafs = leafs{k}, the cluster indexes in data_train
 
