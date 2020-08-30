@@ -46,7 +46,7 @@ data_original_test.y = double(mnist.testY');
 end
 
 
-doCIFAR10 = 1;
+doCIFAR10 = 0;
 if doCIFAR10
 % load the CIFAR-10 dataset, data from https://www.cs.toronto.edu/~kriz/cifar.html
 % structure: 
@@ -84,6 +84,63 @@ data_original_test.y = double(cifar10(6).labels);
 end
 
 
+doTinyImageNet = 1;
+if doTinyImageNet
+% load the tiny ImageNet dataset, explore all folders and .jpeg files with given bounding boxes
+% structure: 
+% training data: 200 folders, each folder with 500 images, so 100000 images in total 
+%          data: [100000×64x64x3 = 10000x12288 uint8]
+%        labels: [100000×1 uint8]
+% first load the training folder path, contains 200 folders with given label, each folder has 500 images under that label
+TrainFolderPath = '~/Documents/Code_Subspace_indexing_Stiefel_Grassman/DATA_tiny-imagenet-200/train/';
+train_folders = dir(TrainFolderPath);
+size_train_folders = size(train_folders);
+length_train_folders = size_train_folders(1);
+% for each folder in the training set, obtain its folder name and corresponding label name
+for i=3:length_train_folders
+    train_folderName = strcat(TrainFolderPath, train_folders(i,1).name); 
+    % load the labels
+    train_labels(:, :, i-2) = train_folderName(end-7: end);
+    % load the bounding boxes
+    train_box_file_names(:, :, i-2) = strcat(train_folderName, '/', train_labels(:, :, i-2), '_boxes.txt');
+    % load the folder names that contain image files
+    train_image_folder_names(:, :, i-2) = strcat(train_folderName, '/images');
+    % within this folder, load all training images with their labels
+    train_ImagePath = train_image_folder_names(:, :, i-2);
+    train_image_names = dir(train_ImagePath);
+    size_train_image_names = size(train_image_names);
+    length_train_image_names = size_train_image_names(1);
+    for j=3:length_train_image_names
+        train_imageName = strcat(train_ImagePath, '/',train_image_names(i,1).name); 
+        % load the training images and labels
+        TinyImageNet_train(i-2,j-2).image(:, :, :) = imread(train_imageName); 
+        TinyImageNet_train(i-2,j-2).input = TinyImageNet_train(i-2,j-2).image(:)';
+        TinyImageNet_train(i-2,j-2).label = str2num(train_labels(:, :, i-2)); 
+    end
+end
+% obtain the original training and testing datasets
+counter = 0;
+for i=3:length_train_folders
+    for j=3:length_train_image_names
+        counter = counter + 1;
+        data.x(counter, :) = double(TinyImageNet_train(i-2,j-2).input);
+        data.image(counter, :, :, :) = TinyImageNet_train(i-2,j-2).image;
+        data.y(counter) = double(TinyImageNet_train(i-2,j-2).label);
+    end
+end
+data.y = data.y';
+n_data = counter;
+indexes = randperm(n_data); 
+% randomly pick the original train and test data set, must be disjoint
+train_indexes = indexes(1: 95000);
+test_indexes = indexes(95001: 100000);
+% form the data_original_train and data_original_text dataset
+data_original_train.x = double(data.x(train_indexes, :));
+data_original_test.x = double(data.x(test_indexes, :));
+data_original_train.y = double(data.y(train_indexes, :));
+data_original_test.y = double(data.y(test_indexes, :));
+end    
+
 
 
 % the data preprocessing projection dimension
@@ -93,11 +150,11 @@ kd_PCA = 64;
 % the LPP embedding dimension = kd_LPP
 kd_LPP = 16;
 % train_size = the training data size
-train_size = 6*2^13;
+train_size = 100*2^8;
 % ht = the partition tree height
-ht = 13;
+ht = 8;
 % test_size = the test data size
-test_size = 1000;
+test_size = 100;
 
 % obtain the train, test sets and the LPP frames Seq(:,:,k) for each cluster with indexes in leafs
 [data_train, leafs, data_test] = LPP_ObtainData(data_original_train, data_original_test, d_pre, kd_LPP, kd_PCA, train_size, test_size, ht);
@@ -324,7 +381,15 @@ for k=1:length(leafs)
     data_train_x_k = data_train.x(leafs{k}, :);
     data_train_y_k = data_train.y(leafs{k});
     % augment the data_train_x_k and data_train_y_k by GMM sampling and pre-trained network prediction
-    % ...to be filled...
+    doEnlargement = 0;
+    if doEnlargement
+        % bulid a Gaussian mixture model on data_train_x_k
+        GMModel = fitgmdist(data_train_x_k, unique(data_train_y_k));
+        % sample from this GMM enough number of training data points, form data_train_x_k
+        data_train_x_k_sampled = random(GMMModel, 100);
+        % use a pretrained neural network to label the additional sampled data_train_x_k_sampled
+                
+    end
     % do an initial PCA first, for the k-th cluster, so data_train_x_k dimension is reduced to kd_PCA
     [PCA_k, lat] = pca(data_train_x_k);
     PCA_k = Complete_SpecialOrthogonal(PCA_k);
