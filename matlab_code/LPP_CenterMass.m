@@ -323,6 +323,8 @@ for k=1:length(leafs)
     % form the data_train subsample for the k-th cluster
     data_train_x_k = data_train.x(leafs{k}, :);
     data_train_y_k = data_train.y(leafs{k});
+    % augment the data_train_x_k and data_train_y_k by GMM sampling and pre-trained network prediction
+    % ...to be filled...
     % do an initial PCA first, for the k-th cluster, so data_train_x_k dimension is reduced to kd_PCA
     [PCA_k, lat] = pca(data_train_x_k);
     PCA_k = Complete_SpecialOrthogonal(PCA_k);
