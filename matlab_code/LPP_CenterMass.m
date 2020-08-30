@@ -15,10 +15,21 @@ if doNWPU
 %   x: [31500×4096 double]
 %   y: [31500×1 double]
 data = load('~/Documents/Code_Subspace_indexing_Stiefel_Grassman/DATA_nwpu-aerial-images.mat');
+% load the size of data and shuffle the indexes to divide it into original training and testing data sets
+[n_data, kd_data] = size(data.x);
+indexes = randperm(n_data); 
+% randomly pick the original train and test data set, must be disjoint
+train_indexes = indexes(1: 30000);
+test_indexes = indexes(30001: 31500);
+% form the data_original_train and data_original_text dataset
+data_original_train.x = double(data.x(train_indexes, :));
+data_original_test.x = double(data.x(test_indexes, :));
+data_original_train.y = double(data.y(train_indexes, :));
+data_original_test.y = double(data.y(test_indexes, :));
 end
 
 
-doMNIST = 1;
+doMNIST = 0;
 if doMNIST
 % load the MNIST dataset
 % structure: 
@@ -28,12 +39,14 @@ if doMNIST
 %    trainX: [60000×784 uint8]
 mnist = load('~/Documents/Code_Subspace_indexing_Stiefel_Grassman/DATA_mnist.mat');
 % preprocess the dataset to fit the format we use
-data.x = double(vertcat(mnist.trainX, mnist.testX));
-data.y = double(vertcat(mnist.trainY', mnist.testY'));
+data_original_train.x = double(mnist.trainX);
+data_original_test.x = double(mnist.testX);
+data_original_train.y = double(mnist.trainY');
+data_original_test.y = double(mnist.testY');
 end
 
 
-doCIFAR10 = 0;
+doCIFAR10 = 1;
 if doCIFAR10
 % load the CIFAR-10 dataset, data from https://www.cs.toronto.edu/~kriz/cifar.html
 % structure: 
@@ -60,13 +73,17 @@ for i = 1:6
     % bulid a given dimensional d_prepre embedding of cifar10 into new cifar10, for computational memory constraint only
     cifar10(i).data = cifar10(i).data * A0(:, 1:d_prepre);
 end
-data.x = double(cifar10(1).data);
-data.y = double(cifar10(1).labels);
-for i = 2:6
-    data.x = double(vertcat(data.x, cifar10(i).data));
-    data.y = double(vertcat(data.y, cifar10(i).labels));
+data_original_train.x = double(cifar10(1).data);
+data_original_train.y = double(cifar10(1).labels);
+for i = 2:5
+    data_original_train.x = double(vertcat(data_original_train.x, cifar10(i).data));
+    data_original_train.y = double(vertcat(data_original_train.y, cifar10(i).labels));
 end
+data_original_test.x = double(cifar10(6).data);
+data_original_test.y = double(cifar10(6).labels);
 end
+
+
 
 
 % the data preprocessing projection dimension
@@ -82,8 +99,9 @@ ht = 13;
 % test_size = the test data size
 test_size = 1000;
 
-% obtain the train, test sets in nwpu and the LPP frames Seq(:,:,k) for each cluster with indexes in leafs
-[data_train, Seq, leafs, data_test] = LPP_train(data, d_pre, kd_LPP, kd_PCA, train_size, ht, test_size);
+% obtain the train, test sets and the LPP frames Seq(:,:,k) for each cluster with indexes in leafs
+[data_train, leafs, data_test] = LPP_ObtainData(data_original_train, data_original_test, d_pre, kd_LPP, kd_PCA, train_size, test_size, ht);
+[Seq] = LPP_BuildDataModel(data_train, leafs, kd_PCA, kd_LPP);
 
 % all these LPP Stiefel frames are on St(n, p)
 n = size(Seq, 1);
@@ -223,88 +241,109 @@ fprintf("original dimension classification rate = %f %%, original dimension aggr
 
 
 
-function [data_train, Seq, leafs, data_test] = LPP_train(data, d_pre, kd_LPP, kd_PCA, train_size, ht, test_size)
+function [data_train, leafs, data_test] = LPP_ObtainData(data_original_train, data_original_test, d_pre, kd_LPP, kd_PCA, train_size, test_size, ht)
 
-% Sample a training dataset data_train from the data set, data_train = (data_train.x, data_train.y)
+% Sample a training dataset data_train from the original data_original_train set, data_train = (data_train.x, data_train.y)
 % Set the partition tree depth = ht
-% Tree partition nwpu_train into clusters C_1, ..., C_{2^{ht}} with centers m_1, ..., m_{2^{ht}}
+% Tree partition data_train into clusters C_1, ..., C_{2^{ht}} with centers m_1, ..., m_{2^{ht}}
 % first project each C_i to local PCA with dimension kd_PCA  
 % then continue to construct the local LPP frames A_1, ..., A_{2^{ht}} in G(kd_data, kd_LPP) using supervised affinity
-% Sample a test dataset data_test from the data set for testing purposes, data_test = (data_test.x, data_test.y)
+% Sample a test dataset data_test from the original data_original_test set for testing purposes, data_test = (data_test.x, data_test.y)
 
-% Input
-%   data = the original data set
+% Input:
+%   data_original_train, data_original_test = the original training and testing data set
 %   d_pre = the data preprocessing projection dimension
 %   kd_PCA = the initial PCA embedding dimension
 %   kd_LPP = the LPP embedding dimension 
 %   train_size, test_size = the training/testing data set size
 %   ht = the partition tree height
-% Output
+% Output:81
 %   data_train, data_test = the training/testing data set , size is traing_size/test_size
 %   leafs = leafs{k}, the cluster indexes in data_train
-%   Seq = the LPP frames corresponding to each cluster in data_train, labeling the correponding Grassmann equivalence class
 
+%compute the sizes of the original training and testing dataset
+[n_data_original_train, kd_data_original_train] = size(data_original_train.x);
+[n_data_original_test, kd_data_original_test] = size(data_original_test.x);
 
+% first concatnate data_train.x and data_test.x together
+data_x = double(vertcat(data_original_train.x, data_original_test.x));
+[n_data_x, kd_data_x] = size(data_x);
 % do an initial PCA on data
-[A0, s0, lat0] = pca(data.x);
-% bulid a given dimensional d_pre embedding of data.x into new data.x, for faster computation only
-data.x = data.x * A0(:, 1:d_pre);
+[A0, s0, lat0] = pca(data_x);
+% bulid a given dimensional d_pre embedding of data_orginal_train(test).x into new data_original_train(test).x, for faster computation only
+data_original_train.x = data_original_train.x * A0(:, 1:d_pre);
+data_original_test.x = data_original_test.x * A0(:, 1:d_pre);
 
-% n_data is the number of samples in data.x dataset, kd_data is the original dimension of each sample
-[n_data, kd_data] = size(data.x);
-
-indexes = randperm(n_data); 
+% build the training and testing data sets
+indexes = randperm(n_data_original_train); 
 % randomly pick the training sample of size train_size from data.x dataset
 train_indexes = indexes(1: train_size);
 % form the data_train dataset
-data_train.x = double(data.x(train_indexes, :));
-data_train.y = double(data.y(train_indexes, :));
+data_train.x = double(data_original_train.x(train_indexes, :));
+data_train.y = double(data_original_train.y(train_indexes, :));
 
+indexes = randperm(n_data_original_test); 
 % randomly pick the test sample of size test_size from data dataset, must be disjoint from data_train
-test_indexes = indexes(train_size + 1: train_size + test_size);
+test_indexes = indexes(1: test_size);
 % form the data_test dataset
-data_test.x = double(data.x(test_indexes, :));
-data_test.y = double(data.y(test_indexes, :));
-
+data_test.x = double(data_original_test.x(test_indexes, :));
+data_test.y = double(data_original_test.y(test_indexes, :));
 
 % do an initial PCA on data_train
 [A0, s0, lat0] = pca(data_train.x);
 % bulid a kd_PCA dimensional embedding of data_train in x0
 x0 = data_train.x * A0(:, 1:kd_PCA);
-% from x0, partition into 2^ht leaf nodes, each leaf node can give samples for a local LPP
+% from x0, partition into 2^ht leaf nodes, each leaf node can give samples for a local LPP, done in LPP_BuildDataModel
 [indx, leafs] = buildVisualWordList(x0, ht);
 
+end
 
+
+
+
+function [Seq] = LPP_BuildDataModel(data_train, leafs, kd_PCA, kd_LPP)
+% build LPP Model for each leaf in data_train
+% Assume the tree partition indexes of data_train into clusters C_1, ..., C_{2^{ht}} with centers m_1, ..., m_{2^{ht}} is given in leafs
+% first project each C_i to local PCA with dimension kd_PCA  
+% then continue to construct the local LPP frames A_1, ..., A_{2^{ht}} in G(kd_data, kd_LPP) using supervised affinity
+
+% Input:
+%   data_train = the training data set
+%   kd_PCA = the initial PCA embedding dimension
+%   kd_LPP = the LPP embedding dimension 
+% Output:
+%   Seq = the LPP frames corresponding to each cluster in data_train, labeling the correponding Grassmann equivalence class
+
+[n_data_train, kd_data_train] = size(data_train.x);
 % initialize the LPP frames A_1,...,A_{2^{ht}}
-Seq = zeros(kd_data, kd_LPP, length(leafs));
-% build LPP Model for each leaf
-doBuildDataModel = 1;
+Seq = zeros(kd_data_train, kd_LPP, length(leafs));
+
 % input: data, indx, leafs
-if doBuildDataModel
-    for k=1:length(leafs)
-        % form the data_train subsample for the k-th cluster
-        data_train_x_k = data_train.x(leafs{k}, :);
-        data_train_y_k = data_train.y(leafs{k});
-        % do an initial PCA first, for the k-th cluster, so data_train_x_k dimension is reduced to kd_PCA
-        [PCA_k, lat] = pca(data_train_x_k);
-        PCA_k = Complete_SpecialOrthogonal(PCA_k);
-        data_train_x_k = data_train_x_k * PCA_k(:, 1:kd_PCA);
-        % then do LPP for the PCA embedded data_train_x_k and reduce the dimension to kd_LPP
-        % construct the supervise affinity matrix S
-        between_class_affinity = 0;
-        S_k = affinity_supervised(data_train_x_k, data_train_y_k, between_class_affinity);
-        % construct the graph Laplacian L and degree matrix D
-        [L_k, D_k] = graph_laplacian(S_k);
-        % do LPP
-        [A_k, lambda] = LPP(data_train_x_k, L_k, D_k);
-        [LPP_k, R] = qr(A_k);        
-        % obtain the frame Seq(:,:,k)
-        Seq(:, :, k) = PCA_k(:, 1:kd_PCA) * LPP_k(:, 1:kd_LPP);
-        fprintf("frame %d, size = (%d, %d), Stiefel = %f \n", k, size(Seq(:,:,k), 1), size(Seq(:,:,k), 2), norm(Seq(:,:,k)'*Seq(:,:,k)-eye(kd_LPP), 'fro'));
-    end
-end    
+for k=1:length(leafs)
+    % form the data_train subsample for the k-th cluster
+    data_train_x_k = data_train.x(leafs{k}, :);
+    data_train_y_k = data_train.y(leafs{k});
+    % do an initial PCA first, for the k-th cluster, so data_train_x_k dimension is reduced to kd_PCA
+    [PCA_k, lat] = pca(data_train_x_k);
+    PCA_k = Complete_SpecialOrthogonal(PCA_k);
+    data_train_x_k = data_train_x_k * PCA_k(:, 1:kd_PCA);
+    % then do LPP for the PCA embedded data_train_x_k and reduce the dimension to kd_LPP
+    % construct the supervise affinity matrix S
+    between_class_affinity = 0;
+    S_k = affinity_supervised(data_train_x_k, data_train_y_k, between_class_affinity);
+    % construct the graph Laplacian L and degree matrix D
+    [L_k, D_k] = graph_laplacian(S_k);
+    % do LPP
+    [A_k, lambda] = LPP(data_train_x_k, L_k, D_k);
+    [LPP_k, R] = qr(A_k);        
+    % obtain the frame Seq(:,:,k)
+    Seq(:, :, k) = PCA_k(:, 1:kd_PCA) * LPP_k(:, 1:kd_LPP);
+    fprintf("frame %d, size = (%d, %d), Stiefel = %f \n", k, size(Seq(:,:,k), 1), size(Seq(:,:,k), 2), norm(Seq(:,:,k)'*Seq(:,:,k)-eye(kd_LPP), 'fro'));
+end
 
 end
+
+
 
 
 
