@@ -97,6 +97,8 @@ train_folders = dir(TrainFolderPath);
 size_train_folders = size(train_folders);
 length_train_folders = size_train_folders(1);
 % for each folder in the training set, obtain its folder name and corresponding label name
+% obtain the original training and testing datasets
+counter = 0;
 for i=3:length_train_folders
     train_folderName = strcat(TrainFolderPath, train_folders(i,1).name); 
     % load the labels
@@ -104,28 +106,28 @@ for i=3:length_train_folders
     % load the bounding boxes
     train_box_file_names(:, :, i-2) = strcat(train_folderName, '/', train_labels(:, :, i-2), '_boxes.txt');
     % load the folder names that contain image files
-    train_image_folder_names(:, :, i-2) = strcat(train_folderName, '/images');
+    train_image_folder_names(:, :, i-2) = strcat(train_folderName, '/images/');
     % within this folder, load all training images with their labels
     train_ImagePath = train_image_folder_names(:, :, i-2);
     train_image_names = dir(train_ImagePath);
     size_train_image_names = size(train_image_names);
     length_train_image_names = size_train_image_names(1);
     for j=3:length_train_image_names
-        train_imageName = strcat(train_ImagePath, '/',train_image_names(i,1).name); 
-        % load the training images and labels
-        TinyImageNet_train(i-2,j-2).image(:, :, :) = imread(train_imageName); 
-        TinyImageNet_train(i-2,j-2).input = TinyImageNet_train(i-2,j-2).image(:)';
-        TinyImageNet_train(i-2,j-2).label = str2num(train_labels(:, :, i-2)); 
-    end
-end
-% obtain the original training and testing datasets
-counter = 0;
-for i=3:length_train_folders
-    for j=3:length_train_image_names
         counter = counter + 1;
-        data.x(counter, :) = double(TinyImageNet_train(i-2,j-2).input);
-        data.image(counter, :, :, :) = TinyImageNet_train(i-2,j-2).image;
-        data.y(counter) = double(TinyImageNet_train(i-2,j-2).label);
+
+        train_imageName = strcat(train_ImagePath, train_image_names(j,1).name); 
+        % load the training images and labels
+        if isequal(size(imread(train_imageName)), [64 64 3])
+            image(:, :, :) = imread(train_imageName); 
+        else
+            for k = 1:3
+                image(:, :, k) = imread(train_imageName);
+            end
+            fprintf("counter= %d, name=%s \n", counter, train_imageName);
+            disp(size(imread(train_imageName)));
+        end
+        %data.x(counter, :) = double(image(:));
+        %data.y(counter) = double(str2num(train_labels(:, :, i-2))); 
     end
 end
 data.y = data.y';
