@@ -319,8 +319,8 @@ if __name__ == "__main__":
     # do the LPP analysis on different datasets
     dorunfile = 1
     # select which dataset to work on
-    doMNIST = 1
-    doCIFAR10 = 0
+    doMNIST = 0
+    doCIFAR10 = 1
     
     if dorunfile:
         # load data
@@ -448,3 +448,5 @@ if __name__ == "__main__":
         print("\n******************** CONCLUSION ********************")
         print("\ncpu runtime for testing = ", cpu_time_end - cpu_time_start, " seconds \n")
         print("\nbenchmark correct classification rate = ", (sum(classified_bm)/test_size)*100, "%, center mass correct classification rate =", (sum(classified_c)/test_size)*100, "%\n")
+
+
