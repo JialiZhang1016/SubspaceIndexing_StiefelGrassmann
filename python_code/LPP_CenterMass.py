@@ -22,7 +22,7 @@ import time
 
 # load the data set, nwpu-aerial-images, MNIST or CIFAR-10
 def load_data(doMNIST, doCIFAR10):
-    
+    # load MNIST dataset
     if doMNIST:
         # load the MNIST dataset
         # structure: 
@@ -42,7 +42,7 @@ def load_data(doMNIST, doCIFAR10):
         for i in range(10000):
             data_original_test["x"].append(np.reshape(x_test[i], 784))
             data_original_test["y"].append(y_test[i])
-
+    # load CIFAR10 dataset
     if doCIFAR10:
         # load the CIFAR-10 dataset
         # structure: 
@@ -232,7 +232,6 @@ def LPP_ObtainData(data_original_train, data_original_test, d_pre, kd_LPP, kd_PC
 # first project each C_i to local PCA with dimension kd_PCA  
 # then continue to construct the local LPP frames A_1, ..., A_{2^{ht}} in G(kd_data, kd_LPP) using supervised affinity
 def LPP_BuildDataModel(data_train, leafs, kd_PCA, kd_LPP):
-    
     # Input:
     #   data_train = the training data set
     #   leafs = the tree partition indexes of data_train into clusters C_1, ..., C_{2^{ht}}
@@ -280,7 +279,6 @@ def LPP_NearestNeighborTest():
     # select which dataset to work on
     doMNIST = 0
     doCIFAR10 = 1
-
     # load data
     data_original_train, data_original_test = load_data(doMNIST, doCIFAR10)
     # the data preprocessing projection dimension
