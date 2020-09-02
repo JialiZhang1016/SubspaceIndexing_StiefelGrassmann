@@ -292,7 +292,7 @@ def LPP_NearestNeighborTest():
     # ht = the partition tree height
     ht = 8
     # test_size = the test data size
-    test_size = 1000
+    test_size = 10000
 
     # obtain the train, test sets in nwpu and the LPP frames Seq(:,:,k) for each cluster with indexes in leafs
     data_train, leafs, data_test = LPP_ObtainData(data_original_train, data_original_test, d_pre, kd_LPP, kd_PCA, train_size, test_size, ht)
@@ -425,6 +425,30 @@ def LPP_NearestNeighborTest():
     print("\ncenter mass correct classification rate =", (sum(classified_c)/test_size)*100, "%\n")
 
     return None
+
+
+# given a set of training_data_original_x with labels training_data_original_y
+# fit from them a GMM model and sample from this GMM model a given number of additional training samples training_data_additional_x 
+# with training_data_additional_x, using a pre-trained learning_model, label each additional sample and produce corresponding labels training_data_additional_y
+def GMM_TrainingDataAugmentation(training_data_original_x, training_data_original_y, number_samples_additional, learning_model):
+    
+    # first detect the dimension of the inputs x in training data
+    kd_data = len(training_data_original_x[0])
+    # initialize training_data_additional_x and training_data_additional_y
+    training_data_additional_x = np.zeros((number_samples_additional, kd_data))
+    training_data_additional_y = np.zeros(number_samples_additional)
+    
+    return training_data_additional_x, training_data_additional_y
+
+
+# produce pre-trained learning_model
+# vgg16 for cifar10
+class model_vgg16_cifar10:
+    
+    def __init__(self):
+        
+
+
 
 
 """
