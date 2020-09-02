@@ -235,38 +235,40 @@ def LPP_BuildDataModel(data_train, leafs, kd_PCA, kd_LPP):
     
     # Input:
     #   data_train = the training data set
+    #   leafs = the tree partition indexes of data_train into clusters C_1, ..., C_{2^{ht}}
     #   kd_PCA = the initial PCA embedding dimension
     #   kd_LPP = the LPP embedding dimension 
     # Output:
     #   Seq = the LPP frames corresponding to each cluster in data_train, labeling the correponding Grassmann equivalence class
 
+    # obtain the dimension of each sample in data_train["x"]
+    kd_data = len(data_train["x"][0])
     # initialize the LPP frames A_1,...,A_{2^{ht}}
     Seq = np.zeros((len(leafs), kd_data, kd_LPP))
     # build LPP Model for each leaf
-    doBuildDataModel = 1
     # input: data, indx, leafs
-    if doBuildDataModel:
-        for k in range(len(leafs)):
-            # form the data_train subsample for the k-th cluster
-            data_train_x_k = [data_train_x[_] for _ in leafs[k]]
-            data_train_y_k = [data_train_y[_] for _ in leafs[k]]
-            # do an initial PCA first, for the k-th cluster, so data_train_x_k dimension is reduced to kd_PCA
-            pca.fit(data_train_x_k)
-            PCA_k = pca.components_
-            PCA_k = Complete_SpecialOrthogonal(PCA_k.T).T
-            data_train_x_k = np.matmul(data_train_x_k, np.array([PCA_k[_] for _ in range(kd_PCA)]).T)
-            # then do LPP for the PCA embedded data_train_x_k and reduce the dimension to kd_LPP
-            # construct the supervise affinity matrix S
-            between_class_affinity = 0
-            S_k = affinity_supervised(data_train_x_k, data_train_y_k, between_class_affinity)
-            # construct the graph Laplacian L and degree matrix D
-            L_k, D_k = graph_laplacian(S_k)
-            # do LPP
-            A_k, LAMBDA = LPP(data_train_x_k, L_k, D_k)
-            LPP_k, R = np.linalg.qr(A_k)        
-            # obtain the frame Seq(:,:,k)
-            Seq[k] = np.matmul(np.array([PCA_k[_] for _ in range(kd_PCA)]).T, np.array([LPP_k[_] for _ in range(kd_LPP)]).T)
-            print("frame ",k+1," size=(", len(Seq[k]),",",len(Seq[k][0]), "), Stiefel = ", np.linalg.norm(np.array(np.matmul(Seq[k].T, Seq[k]))-np.array(np.diag(np.ones(kd_LPP)))))
+    for k in range(len(leafs)):
+        # form the data_train subsample the k-th cluster
+        data_train_x_k = [data_train["x"][_] for _ in leafs[k]]
+        data_train_y_k = [data_train["y"][_] for _ in leafs[k]]
+        # do an initial PCA first, for the k-th cluster, so data_train_x_k dimension is reduced to kd_PCA
+        pca = PCA()
+        pca.fit(data_train_x_k)
+        PCA_k = pca.components_
+        PCA_k = Complete_SpecialOrthogonal(PCA_k.T).T
+        data_train_x_k = np.matmul(data_train_x_k, np.array([PCA_k[_] for _ in range(kd_PCA)]).T)
+        # then do LPP for the PCA embedded data_train_x_k and reduce the dimension to kd_LPP
+        # construct the supervise affinity matrix S
+        between_class_affinity = 0
+        S_k = affinity_supervised(data_train_x_k, data_train_y_k, between_class_affinity)
+        # construct the graph Laplacian L and degree matrix D
+        L_k, D_k = graph_laplacian(S_k)
+        # do LPP
+        A_k, LAMBDA = LPP(data_train_x_k, L_k, D_k)
+        LPP_k, R = np.linalg.qr(A_k)        
+        # obtain the frame Seq(:,:,k)
+        Seq[k] = np.matmul(np.array([PCA_k[_] for _ in range(kd_PCA)]).T, np.array([LPP_k[_] for _ in range(kd_LPP)]).T)
+        print("frame ",k+1," size=(", len(Seq[k]),",",len(Seq[k][0]), "), Stiefel = ", np.linalg.norm(np.array(np.matmul(Seq[k].T, Seq[k]))-np.array(np.diag(np.ones(kd_LPP)))))
 
     return Seq
 
@@ -317,28 +319,28 @@ if __name__ == "__main__":
     # do the LPP analysis on different datasets
     dorunfile = 1
     # select which dataset to work on
-    doNWPU = 0
-    doMNIST = 0
-    doCIFAR10 = 1
+    doMNIST = 1
+    doCIFAR10 = 0
     
     if dorunfile:
         # load data
-        data = load_data(doNWPU, doMNIST, doCIFAR10)
+        data_original_train, data_original_test = load_data(doMNIST, doCIFAR10)
         # the data preprocessing projection dimension
-        d_pre = 1024
+        d_pre = 256
         # the PCA embedding dimension = kd_PCA
-        kd_PCA = 512
+        kd_PCA = 128
         # the LPP embedding dimension = kd_LPP
-        kd_LPP = 256
+        kd_LPP = 64
         # train_size = the training data size
-        train_size = 50000
+        train_size = 200*(2**8)
         # ht = the partition tree height
-        ht = 6
+        ht = 8
         # test_size = the test data size
-        test_size = 10000
+        test_size = 100
 
         # obtain the train, test sets in nwpu and the LPP frames Seq(:,:,k) for each cluster with indexes in leafs
-        data_train, Seq, leafs, data_test = LPP_train(data, d_pre, kd_LPP, kd_PCA, train_size, ht, test_size)
+        data_train, leafs, data_test = LPP_ObtainData(data_original_train, data_original_test, d_pre, kd_LPP, kd_PCA, train_size, test_size, ht)
+        Seq = LPP_BuildDataModel(data_train, leafs, kd_PCA, kd_LPP)
 
         # all these LPP Stiefel frames are on St(n, p)
         n = len(Seq[0])
