@@ -21,15 +21,8 @@ import time
 
 
 # load the data set, nwpu-aerial-images, MNIST or CIFAR-10
-def load_data(doNWPU, doMNIST, doCIFAR10):
+def load_data(doMNIST, doCIFAR10):
     
-    if doNWPU:
-        # load the nwpu-aerial-images dataset
-        # structure: 
-        #   x: [31500×4096 double]
-        #   y: [31500×1 double]
-        data = {"x": [0], "y": [1]}
-
     if doMNIST:
         # load the MNIST dataset
         # structure: 
@@ -40,14 +33,15 @@ def load_data(doNWPU, doMNIST, doCIFAR10):
         mnist = tf.keras.datasets.mnist
         (x_train, y_train), (x_test, y_test) = mnist.load_data()
         # preprocess the dataset to fit the format we use
-        data = {"x": [], "y": []}
+        data_original_train = {"x": [], "y": []}
+        data_original_test = {"x": [], "y": []}
         # first turn the matrices of x_train and x_test to 28 x 28 = 784 dimensional vectors
         for i in range(60000):
-            data["x"].append(np.reshape(x_train[i], 784))
-            data["y"].append(y_train[i])
+            data_original_train["x"].append(np.reshape(x_train[i], 784))
+            data_original_train["y"].append(y_train[i])
         for i in range(10000):
-            data["x"].append(np.reshape(x_test[i], 784))
-            data["y"].append(y_test[i])
+            data_original_test["x"].append(np.reshape(x_test[i], 784))
+            data_original_test["y"].append(y_test[i])
 
     if doCIFAR10:
         # load the CIFAR-10 dataset
@@ -60,15 +54,17 @@ def load_data(doNWPU, doMNIST, doCIFAR10):
         cifar10 = tf.keras.datasets.cifar10
         (x_train, y_train), (x_test, y_test) = cifar10.load_data()
         # preprocess the dataset to fit the format we use
-        data = {"x": [], "y": []}
+        data_original_train = {"x": [], "y": []}
+        data_original_test = {"x": [], "y": []}
         # first turn the matrices of x_train and x_test to 32 x 32 x 3 = 3072 dimensional vectors
         for i in range(50000):
-            data["x"].append(np.reshape(x_train[i], 3072))
-            data["y"].append(y_train[i][0])
+            data_original_train["x"].append(np.reshape(x_train[i], 3072))
+            data_original_train["y"].append(y_train[i][0])
         for i in range(10000):
-            data["x"].append(np.reshape(x_test[i], 3072))
-            data["y"].append(y_test[i][0])
-    return data
+            data_original_test["x"].append(np.reshape(x_test[i], 3072))
+            data_original_test["y"].append(y_test[i][0])
+            
+    return data_original_train, data_original_test
 
 
 # k-nearest neighbor classfication
@@ -171,13 +167,11 @@ def Complete_SpecialOrthogonal(A):
     return Q
 
 
-# Sample a training dataset data_train from the data set, data_train = (data_train.x, data_train.y)
+# Sample a training dataset data_train from the data_original_train set, data_train = (data_train["x"], data_train["y"])
 # Set the partition tree depth = ht
-# Tree partition nwpu_train into clusters C_1, ..., C_{2^{ht}} with centers m_1, ..., m_{2^{ht}}
-# first project each C_i to local PCA with dimension kd_PCA  
-# then continue to construct the local LPP frames A_1, ..., A_{2^{ht}} in G(kd_data, kd_LPP) using supervised affinity
-# Sample a test dataset data_test from the data set for testing purposes, data_test = (data_test.x, data_test.y)
-def LPP_train(data, d_pre, kd_LPP, kd_PCA, train_size, ht, test_size):
+# Tree partition data_train into clusters C_1, ..., C_{2^{ht}} with centers m_1, ..., m_{2^{ht}}
+# Sample a test dataset data_test from the data_original_test set for testing purposes, data_test = (data_test["x"], data_test["y"])
+def LPP_ObtainData(data_original_train, data_original_test, d_pre, kd_LPP, kd_PCA, train_size, test_size, ht):
     # Input
     #   data = the original data set, in the python code we treat it as a dictionary data={"x": [inputs], "y": [labels]}
     #   d_pre = the data preprocessing projection dimension
@@ -188,38 +182,37 @@ def LPP_train(data, d_pre, kd_LPP, kd_PCA, train_size, ht, test_size):
     # Output
     #   data_train, data_test = the training/testing data set , size is traing_size/test_size
     #   leafs = leafs{k}, the cluster indexes in data_train
-    #   Seq = the LPP frames corresponding to each cluster in data_train, labeling the correponding Grassmann equivalence class
     
-    # read the data into inputs and labels
-    data_x = data["x"]
-    data_y = data["y"]
-    data_x = np.array(data_x)
-    data_y = np.array(data_y)
-    
+    # compute the sizes of the original training and testing dataset
+    n_data_original_train = len(data_original_train["x"]) 
+    n_data_original_test = len(data_original_test["x"])
+
+    # first concatnate data_original_train["x"] and data_original_test["x"] together
+    data_x = np.array(data_original_train["x"] + data_original_test["x"])
     # do an initial PCA on data
     pca = PCA()
     pca.fit(data_x)
     A0 = pca.components_
-    # bulid a given dimensional d_pre embedding of data_x into new data_x, for faster computation only
-    data_x = np.matmul(data_x, np.array([A0[_] for _ in range(d_pre)]).T)
+    # bulid a given dimensional d_pre embedding of data_orginal_train(test).x into new data_original_train(test).x, for faster computation only
+    data_original_train["x"] = np.matmul(data_original_train["x"], np.array([A0[_] for _ in range(d_pre)]).T)
+    data_original_test["x"] = np.matmul(data_original_test["x"], np.array([A0[_] for _ in range(d_pre)]).T)
     
-    # n_data is the number of samples in data_x dataset, kd_data is the original dimension of each sample
-    n_data = len(data_x)
-    kd_data = len(data_x[0])
-    
-    indexes = np.random.permutation(n_data) 
-    # randomly pick the training sample of size train_size from data.x dataset
+    # build the training data set
+    indexes = np.random.permutation(n_data_original_train) 
+    # randomly pick the training sample of size train_size from data_original_train dataset
     train_indexes = [indexes[_] for _ in range(train_size)]
     # form the data_train dataset
-    data_train_x = [data_x[_] for _ in train_indexes]
-    data_train_y = [data_y[_] for _ in train_indexes]
+    data_train_x = [data_original_train["x"][_] for _ in train_indexes]
+    data_train_y = [data_original_train["y"][_] for _ in train_indexes]
     data_train = {"x": data_train_x, "y": data_train_y}
     
-    # randomly pick the test sample of size test_size from data dataset, must be disjoint from data_train
-    test_indexes = [indexes[_]  for _ in range(train_size, train_size + test_size)]
+    # build the testing data set
+    indexes = np.random.permutation(n_data_original_test) 
+    # randomly pick the test sample of size test_size from data_original_test dataset
+    test_indexes = [indexes[_]  for _ in range(test_size)]
     # form the data_test dataset
-    data_test_x = [data_x[_] for _ in test_indexes]
-    data_test_y = [data_y[_] for _ in test_indexes]
+    data_test_x = [data_original_test["x"][_] for _ in test_indexes]
+    data_test_y = [data_original_test["y"][_] for _ in test_indexes]
     data_test = {"x": data_test_x, "y": data_test_y}
     
     # do an initial PCA on data_train
@@ -230,6 +223,22 @@ def LPP_train(data, d_pre, kd_LPP, kd_PCA, train_size, ht, test_size):
     x0 = np.matmul(data_train_x, np.array([A0[_] for _ in range(kd_PCA)]).T)
     # from x0, partition into 2^ht leaf nodes, each leaf node can give samples for a local LPP
     indx, leafs, mbrs = buildVisualWordList(x0, ht)
+    
+    return data_train, leafs, data_test
+
+
+# build LPP Model for each leaf in data_train
+# Assume the tree partition indexes of data_train into clusters C_1, ..., C_{2^{ht}} with centers m_1, ..., m_{2^{ht}} is given in leafs
+# first project each C_i to local PCA with dimension kd_PCA  
+# then continue to construct the local LPP frames A_1, ..., A_{2^{ht}} in G(kd_data, kd_LPP) using supervised affinity
+def LPP_BuildDataModel(data_train, leafs, kd_PCA, kd_LPP):
+    
+    # Input:
+    #   data_train = the training data set
+    #   kd_PCA = the initial PCA embedding dimension
+    #   kd_LPP = the LPP embedding dimension 
+    # Output:
+    #   Seq = the LPP frames corresponding to each cluster in data_train, labeling the correponding Grassmann equivalence class
 
     # initialize the LPP frames A_1,...,A_{2^{ht}}
     Seq = np.zeros((len(leafs), kd_data, kd_LPP))
@@ -259,7 +268,7 @@ def LPP_train(data, d_pre, kd_LPP, kd_PCA, train_size, ht, test_size):
             Seq[k] = np.matmul(np.array([PCA_k[_] for _ in range(kd_PCA)]).T, np.array([LPP_k[_] for _ in range(kd_LPP)]).T)
             print("frame ",k+1," size=(", len(Seq[k]),",",len(Seq[k][0]), "), Stiefel = ", np.linalg.norm(np.array(np.matmul(Seq[k].T, Seq[k]))-np.array(np.diag(np.ones(kd_LPP)))))
 
-    return data_train, Seq, leafs, data_test
+    return Seq
 
 
 
@@ -316,17 +325,17 @@ if __name__ == "__main__":
         # load data
         data = load_data(doNWPU, doMNIST, doCIFAR10)
         # the data preprocessing projection dimension
-        d_pre = 256
+        d_pre = 1024
         # the PCA embedding dimension = kd_PCA
-        kd_PCA = 64
+        kd_PCA = 512
         # the LPP embedding dimension = kd_LPP
-        kd_LPP = 16
+        kd_LPP = 256
         # train_size = the training data size
-        train_size = 100*(2**9)
+        train_size = 50000
         # ht = the partition tree height
-        ht = 9
+        ht = 6
         # test_size = the test data size
-        test_size = 1000
+        test_size = 10000
 
         # obtain the train, test sets in nwpu and the LPP frames Seq(:,:,k) for each cluster with indexes in leafs
         data_train, Seq, leafs, data_test = LPP_train(data, d_pre, kd_LPP, kd_PCA, train_size, ht, test_size)
@@ -345,10 +354,11 @@ if __name__ == "__main__":
 
         # set the sequence of interpolation numbers and the threshold ratio for determining the interpolation number
         interpolation_number_seq = np.ones(test_size)
-        ratio_threshold = 1.1
+        ratio_threshold = 1.1 # the ratio for determinining the interpolation_number, serve as a tuning parameter
+        ratio_seq = np.zeros((test_size, 2)) # the sequence of second smallest (or largest) to-center distance over smallest to-center distance, for tuning ratio_threshold
    
         K = 1e-8 # the scaling coefficient for calculating the weights w = e^{-K distance^2}
-        k_nearest_neighbor = 80 # the parameter k for k-nearest-neighbor classification
+        k_nearest_neighbor = 1 # the parameter k for k-nearest-neighbor classification
    
         classified_bm = np.zeros(test_size) # list of classified/not classified projections for using the nearest frame, benchmark
         classified_c = np.zeros(test_size) # list of classified/not classified projections for using the Grassmann center method
@@ -369,7 +379,9 @@ if __name__ == "__main__":
             # count the number of St(p, n) interpolation clusters for current test point x
             # interpolation_number = number of frames used for interpolation between cluster LDA frames
             interpolation_number = 1
-            #print("diatances = ", dist_sort[1], " and ", dist_sort[0], "and", dist_sort[2**ht-1], " ratio=", dist_sort[1]/dist_sort[0])
+            print("ratio between [", dist_sort[1]/dist_sort[0], ",", dist_sort[2**ht-1]/dist_sort[0], "]")
+            ratio_seq[test_index][0] = dist_sort[1]/dist_sort[0]
+            ratio_seq[test_index][1] = dist_sort[2**ht-1]/dist_sort[0]
             for k in range(1, 2**ht):
                 if dist_sort[k] <= ratio_threshold * dist_sort[0]:
                     interpolation_number = interpolation_number + 1
