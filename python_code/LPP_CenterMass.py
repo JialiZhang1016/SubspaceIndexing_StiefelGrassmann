@@ -273,6 +273,161 @@ def LPP_BuildDataModel(data_train, leafs, kd_PCA, kd_LPP):
     return Seq
 
 
+# Test the LPP piecewise linear embedding model and the interpolated piecewise linear embedding model
+# Using k-nearest neighbor classification method
+# Also compare with the nearest neighbor classification in the original dimension
+def LPP_NearestNeighborTest():
+    # select which dataset to work on
+    doMNIST = 0
+    doCIFAR10 = 1
+
+    # load data
+    data_original_train, data_original_test = load_data(doMNIST, doCIFAR10)
+    # the data preprocessing projection dimension
+    d_pre = 256
+    # the PCA embedding dimension = kd_PCA
+    kd_PCA = 128
+    # the LPP embedding dimension = kd_LPP
+    kd_LPP = 100
+    # train_size = the training data size
+    train_size = 150*(2**8)
+    # ht = the partition tree height
+    ht = 8
+    # test_size = the test data size
+    test_size = 1000
+
+    # obtain the train, test sets in nwpu and the LPP frames Seq(:,:,k) for each cluster with indexes in leafs
+    data_train, leafs, data_test = LPP_ObtainData(data_original_train, data_original_test, d_pre, kd_LPP, kd_PCA, train_size, test_size, ht)
+    Seq = LPP_BuildDataModel(data_train, leafs, kd_PCA, kd_LPP)
+
+    # all these LPP Stiefel frames are on St(n, p)
+    n = len(Seq[0])
+    p = len(Seq[0][0])
+        
+    # data original dimension kd_data
+    kd_data = len(data_train["x"][0])
+        
+    # find m_1, ..., m_{2^{ht}}, the means of the chosen clusters
+    m = np.zeros((2**ht, kd_data))
+    for k in range(2**ht):
+        m[k] = np.mean([data_train["x"][_] for _ in leafs[k]], axis=0)
+
+    # set the sequence of interpolation numbers and the threshold ratio for determining the interpolation number
+    interpolation_number_seq = np.ones(test_size)
+    ratio_threshold = 1.1 # the ratio for determinining the interpolation_number, serve as a tuning parameter
+    ratio_seq = np.zeros((test_size, 2)) # the sequence of second smallest (or largest) to-center distance over smallest to-center distance, for tuning ratio_threshold
+   
+    K = 1e-8 # the scaling coefficient for calculating the weights w = e^{-K distance^2}
+    k_nearest_neighbor = 1 # the parameter k for k-nearest-neighbor classification
+   
+    classified_o = np.zeros(test_size) # list of classified/not classified projections for using the original data point and nearest cluster
+    classified_agg_o = np.zeros(test_size) # list of classified/not classified projections for using the original data point and nearest (interpolation_number) clusters
+    classified_bm = np.zeros(test_size) # list of classified/not classified projections for using the nearest frame, benchmark
+    classified_c = np.zeros(test_size) # list of classified/not classified projections for using the Grassmann center method
+   
+    doGrassmannpFCenter = 0 # do or do not do projected Frobenius center of mass for Grassmannian frame
+    doStiefelEuclidCenter = 1 # do or do not do Euclid center of mass for Stiefel frame 
+    doGD = 0 # do or do not do GD for finding projected Frobenius center of mass
+   
+    cpu_time_start = time.process_time()
+    for test_index in range(test_size):
+        print("\ntest point", test_index+1, " -----------------------------------------------------------\n")
+        x = data_test["x"][test_index]
+        #print("norm x = ", np.linalg.norm(x))
+        y = data_test["y"][test_index]
+        # sort the cluster centers m_1, ..., m_{2^{ht}} by ascending distances to x 
+        dist = [np.linalg.norm(x-m[k]) for k in range(2**ht)]
+        indexes, dist_sort = zip(*sorted(enumerate(dist), key=itemgetter(1))) 
+        # count the number of St(p, n) interpolation clusters for current test point x
+        # interpolation_number = number of frames used for interpolation between cluster LDA frames
+        interpolation_number = 1
+        print("ratio between [", dist_sort[1]/dist_sort[0], ",", dist_sort[2**ht-1]/dist_sort[0], "]")
+        ratio_seq[test_index][0] = dist_sort[1]/dist_sort[0]
+        ratio_seq[test_index][1] = dist_sort[2**ht-1]/dist_sort[0]
+        for k in range(1, 2**ht):
+            if dist_sort[k] <= ratio_threshold * dist_sort[0]:
+                interpolation_number = interpolation_number + 1
+            else:
+                break
+        print("interpolation number = ", interpolation_number)
+        # record the sequence of all interpolation numbers for each test point x
+        interpolation_number_seq[test_index] = interpolation_number
+        # find the LPP Stiefel projection frames A_k1, ..., A_k{interpolation_number} for the first (interpolation_number) closest clusters to x
+        frames = np.zeros((interpolation_number, kd_data, kd_LPP))
+        for i in range(interpolation_number):
+            frames[i] = Seq[indexes[i]]
+        # find the weights w_1, ..., w_{interpolation_number} for the first (interpolation_number) closest clusters to x
+        w = [np.exp(-K * (dist_sort[i]**2)) for i in range(interpolation_number)]
+        # collect all indexes in clusters corresponding to the first (interpolation_number) closest clusters to x
+        aggregate_cluster = []
+        for i in range(interpolation_number):
+            aggregate_cluster = list(set(aggregate_cluster) | set(leafs[indexes[i]]))
+        #print("aggregate_cluster=", aggregate_cluster)
+        # do k-nearest-neighbor classification based on the closest cluster to x, in original space
+        x_test = x
+        y_test = y
+        X_train = [data_train["x"][_] for _ in leafs[indexes[0]]]
+        Y_train = [data_train["y"][_] for _ in leafs[indexes[0]]]
+        isclassified_o = knn(x_test, y_test, X_train, Y_train, k_nearest_neighbor)
+        classified_o[test_index] = isclassified_o
+        # do k-nearest-neighbor classification based on the (interpolation_number) nearest clusters to x, in oroginal space
+        x_test = x
+        y_test = y
+        X_train = [data_train["x"][_] for _ in aggregate_cluster]
+        Y_train = [data_train["y"][_] for _ in aggregate_cluster]
+        isclassified_agg_o = knn(x_test, y_test, X_train, Y_train, k_nearest_neighbor)
+        classified_agg_o[test_index] = isclassified_agg_o
+        # project x to A1 x and classify it using k-nearest-neighbor on the projection via A1 of the closest cluster
+        x_test = np.matmul(x, frames[0])
+        y_test = y
+        X_train = [np.matmul(data_train["x"][_],  frames[0]) for _ in leafs[indexes[0]]]
+        Y_train = [data_train["y"][_] for _ in leafs[indexes[0]]]
+        isclassified_bm = knn(x_test, y_test, X_train, Y_train, k_nearest_neighbor)
+        classified_bm[test_index] = isclassified_bm
+        # calculate the center of mass for the (interpolation_number) nearest cluster LPP frames with respect to weights w 
+        threshold_gradnorm = 1e-4
+        threshold_fixedpoint = 1e-4
+        threshold_checkonGrassmann = 1e-10
+        threshold_checkonStiefel = 1e-10
+        threshold_logStiefel = 1e-4
+        if doGrassmannpFCenter:
+            # do Grassmann center of mass method
+            GrassmannOpt = Grassmann_Optimization(w, frames, threshold_gradnorm, threshold_fixedpoint, threshold_checkonGrassmann)
+            if doGD:
+                break
+            else:
+                center, value, grad = GrassmannOpt.Center_Mass_pFrobenius()
+        else:
+            # do Stiefel center of mass method
+            StiefelOpt = Stiefel_Optimization(w, frames, threshold_gradnorm, threshold_fixedpoint, threshold_checkonStiefel, threshold_logStiefel)
+            if doStiefelEuclidCenter:
+                if doGD:
+                    break
+                else:
+                    center, value, gradnorm = StiefelOpt.Center_Mass_Euclid()
+            else:
+                break
+        # project x to center x and classify it using k-nearest-neighbor on the projection via center of all (interpolation number) clusters
+        x_test = np.matmul(x , center)
+        y_test = y
+        X_train = [np.matmul(data_train["x"][_], center) for _ in aggregate_cluster]
+        Y_train = [data_train["y"][_] for _ in aggregate_cluster]    
+        isclassified_c = knn(x_test, y_test, X_train, Y_train, k_nearest_neighbor)
+        classified_c[test_index] = isclassified_c
+        # output the result
+        print("benchmark classified = ",  isclassified_bm, " center mass classfied =", isclassified_c)
+
+    # summarize the final result
+    cpu_time_end = time.process_time()
+    print("\n******************** CONCLUSION ********************")
+    print("\ncpu runtime for testing = ", cpu_time_end - cpu_time_start, " seconds \n")
+    print("\noriginal dimension classification rate = ", (sum(classified_o)/test_size)*100, "%")
+    print("\noriginal dimension aggregate classification rate =", (sum(classified_agg_o)/test_size)*100, "%")
+    print("\nbenchmark correct classification rate = ", (sum(classified_bm)/test_size)*100, "%")
+    print("\ncenter mass correct classification rate =", (sum(classified_c)/test_size)*100, "%\n")
+
+    return None
+
 
 """
 ################################ MAIN RUNNING FILE #####################################
@@ -318,135 +473,8 @@ if __name__ == "__main__":
     
     # do the LPP analysis on different datasets
     dorunfile = 1
-    # select which dataset to work on
-    doMNIST = 0
-    doCIFAR10 = 1
     
     if dorunfile:
-        # load data
-        data_original_train, data_original_test = load_data(doMNIST, doCIFAR10)
-        # the data preprocessing projection dimension
-        d_pre = 256
-        # the PCA embedding dimension = kd_PCA
-        kd_PCA = 128
-        # the LPP embedding dimension = kd_LPP
-        kd_LPP = 64
-        # train_size = the training data size
-        train_size = 200*(2**8)
-        # ht = the partition tree height
-        ht = 8
-        # test_size = the test data size
-        test_size = 100
-
-        # obtain the train, test sets in nwpu and the LPP frames Seq(:,:,k) for each cluster with indexes in leafs
-        data_train, leafs, data_test = LPP_ObtainData(data_original_train, data_original_test, d_pre, kd_LPP, kd_PCA, train_size, test_size, ht)
-        Seq = LPP_BuildDataModel(data_train, leafs, kd_PCA, kd_LPP)
-
-        # all these LPP Stiefel frames are on St(n, p)
-        n = len(Seq[0])
-        p = len(Seq[0][0])
-        
-        # data original dimension kd_data
-        kd_data = len(data_train["x"][0])
-        
-        # find m_1, ..., m_{2^{ht}}, the means of the chosen clusters
-        m = np.zeros((2**ht, kd_data))
-        for k in range(2**ht):
-            m[k] = np.mean([data_train["x"][_] for _ in leafs[k]], axis=0)
-
-        # set the sequence of interpolation numbers and the threshold ratio for determining the interpolation number
-        interpolation_number_seq = np.ones(test_size)
-        ratio_threshold = 1.1 # the ratio for determinining the interpolation_number, serve as a tuning parameter
-        ratio_seq = np.zeros((test_size, 2)) # the sequence of second smallest (or largest) to-center distance over smallest to-center distance, for tuning ratio_threshold
-   
-        K = 1e-8 # the scaling coefficient for calculating the weights w = e^{-K distance^2}
-        k_nearest_neighbor = 1 # the parameter k for k-nearest-neighbor classification
-   
-        classified_bm = np.zeros(test_size) # list of classified/not classified projections for using the nearest frame, benchmark
-        classified_c = np.zeros(test_size) # list of classified/not classified projections for using the Grassmann center method
-   
-        doGrassmannpFCenter = 0 # do or do not do projected Frobenius center of mass for Grassmannian frame
-        doStiefelEuclidCenter = 1 # do or do not do Euclid center of mass for Stiefel frame 
-        doGD = 0 # do or do not do GD for finding projected Frobenius center of mass
-   
-        cpu_time_start = time.process_time()
-        for test_index in range(test_size):
-            print("\ntest point", test_index+1, " -----------------------------------------------------------\n")
-            x = data_test["x"][test_index]
-            #print("norm x = ", np.linalg.norm(x))
-            y = data_test["y"][test_index]
-            # sort the cluster centers m_1, ..., m_{2^{ht}} by ascending distances to x 
-            dist = [np.linalg.norm(x-m[k]) for k in range(2**ht)]
-            indexes, dist_sort = zip(*sorted(enumerate(dist), key=itemgetter(1))) 
-            # count the number of St(p, n) interpolation clusters for current test point x
-            # interpolation_number = number of frames used for interpolation between cluster LDA frames
-            interpolation_number = 1
-            print("ratio between [", dist_sort[1]/dist_sort[0], ",", dist_sort[2**ht-1]/dist_sort[0], "]")
-            ratio_seq[test_index][0] = dist_sort[1]/dist_sort[0]
-            ratio_seq[test_index][1] = dist_sort[2**ht-1]/dist_sort[0]
-            for k in range(1, 2**ht):
-                if dist_sort[k] <= ratio_threshold * dist_sort[0]:
-                    interpolation_number = interpolation_number + 1
-                else:
-                    break
-            print("interpolation number = ", interpolation_number)
-            # record the sequence of all interpolation numbers for each test point x
-            interpolation_number_seq[test_index] = interpolation_number
-            # find the LPP Stiefel projection frames A_k1, ..., A_k{interpolation_number} for the first (interpolation_number) closest clusters to x
-            frames = np.zeros((interpolation_number, kd_data, kd_LPP))
-            for i in range(interpolation_number):
-                frames[i] = Seq[indexes[i]]
-            # find the weights w_1, ..., w_{interpolation_number} for the first (interpolation_number) closest clusters to x
-            w = [np.exp(-K * (dist_sort[i]**2)) for i in range(interpolation_number)]
-            # collect all indexes in clusters corresponding to the first (interpolation_number) closest clusters to x
-            aggregate_cluster = []
-            for i in range(interpolation_number):
-                aggregate_cluster = list(set(aggregate_cluster) | set(leafs[indexes[i]]))
-            #print("aggregate_cluster=", aggregate_cluster)
-            # project x to A1 x and classify it using k-nearest-neighbor on the projection via A1 of the closest cluster
-            x_test = np.matmul(x, frames[0])
-            y_test = y
-            X_train = [np.matmul(data_train["x"][_],  frames[0]) for _ in leafs[indexes[0]]]
-            Y_train = [data_train["y"][_] for _ in leafs[indexes[0]]]
-            isclassified_bm = knn(x_test, y_test, X_train, Y_train, k_nearest_neighbor)
-            classified_bm[test_index] = isclassified_bm
-            # calculate the center of mass for the (interpolation_number) nearest cluster LPP frames with respect to weights w 
-            threshold_gradnorm = 1e-4
-            threshold_fixedpoint = 1e-4
-            threshold_checkonGrassmann = 1e-10
-            threshold_checkonStiefel = 1e-10
-            threshold_logStiefel = 1e-4
-            if doGrassmannpFCenter:
-                # do Grassmann center of mass method
-                GrassmannOpt = Grassmann_Optimization(w, frames, threshold_gradnorm, threshold_fixedpoint, threshold_checkonGrassmann)
-                if doGD:
-                     break
-                else:
-                    center, value, grad = GrassmannOpt.Center_Mass_pFrobenius()
-            else:
-                # do Stiefel center of mass method
-                StiefelOpt = Stiefel_Optimization(w, frames, threshold_gradnorm, threshold_fixedpoint, threshold_checkonStiefel, threshold_logStiefel)
-                if doStiefelEuclidCenter:
-                    if doGD:
-                        break
-                    else:
-                        center, value, gradnorm = StiefelOpt.Center_Mass_Euclid()
-                else:
-                    break
-            # project x to center x and classify it using k-nearest-neighbor on the projection via center of all (interpolation number) clusters
-            x_test = np.matmul(x , center)
-            y_test = y
-            X_train = [np.matmul(data_train["x"][_], center) for _ in aggregate_cluster]
-            Y_train = [data_train["y"][_] for _ in aggregate_cluster]    
-            isclassified_c = knn(x_test, y_test, X_train, Y_train, k_nearest_neighbor)
-            classified_c[test_index] = isclassified_c
-            # output the result
-            print("benchmark classified = ",  isclassified_bm, " center mass classfied =", isclassified_c)
-
-        # summarize the final result
-        cpu_time_end = time.process_time()
-        print("\n******************** CONCLUSION ********************")
-        print("\ncpu runtime for testing = ", cpu_time_end - cpu_time_start, " seconds \n")
-        print("\nbenchmark correct classification rate = ", (sum(classified_bm)/test_size)*100, "%, center mass correct classification rate =", (sum(classified_c)/test_size)*100, "%\n")
+        LPP_NearestNeighborTest()
 
 
