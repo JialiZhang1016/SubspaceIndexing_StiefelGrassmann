@@ -18,6 +18,7 @@ from scipy.spatial.distance import cdist
 from sklearn.decomposition import PCA
 import tensorflow as tf
 import time
+from cifar10vgg import cifar10vgg
 
 
 # load the data set, nwpu-aerial-images, MNIST or CIFAR-10
@@ -235,7 +236,7 @@ def LPP_BuildDataModel(data_train, leafs, kd_PCA, kd_LPP):
             # sample from this GMM enough number of training data points, form data_train_x_k
             # use the pre-trained learning model, predict labels for the newly generated training set
             number_samples_additional = 200
-            learning_model = 0
+            learning_model = 'cifar10vgg'
             data_train_x_k_additional, data_train_y_k_additional = GMM_TrainingDataAugmentation(data_train_x_k, 
                                                                                                 data_train_y_k, 
                                                                                                 number_samples_additional, 
@@ -279,9 +280,9 @@ def LPP_NearestNeighborTest():
     # the LPP embedding dimension = kd_LPP
     kd_LPP = 100
     # train_size = the training data size
-    train_size = 100*(2**8)
+    train_size = 12*(2**11)
     # ht = the partition tree height
-    ht = 8
+    ht = 11
     # test_size = the test data size
     test_size = 1000
 
@@ -432,19 +433,13 @@ def GMM_TrainingDataAugmentation(training_data_original_x, training_data_origina
 
     # using GMM, generate an additional set of training_data_additional_x and predict training_data_additional_y
     training_data_additional_x_, y = gmm.sample(number_samples_additional)
-    training_data_additional_y = (gmm.predict(training_data_additional_x_)).tolist()
+    if learning_model == 'cifar10vgg':
+        training_data_additional_y = (gmm.predict(training_data_additional_x_)).tolist()
+    else:
+        training_data_additional_y = (gmm.predict(training_data_additional_x_)).tolist()        
     training_data_additional_x = [np.array(training_data_additional_x_[_]) for _ in range(number_samples_additional)]
   
     return training_data_additional_x, training_data_additional_y
-
-
-# produce pre-trained learning_model
-# vgg16 for cifar10
-class model_vgg16_cifar10:
-    
-    def __init__(self):
-        self.a=0
-
 
 
 
