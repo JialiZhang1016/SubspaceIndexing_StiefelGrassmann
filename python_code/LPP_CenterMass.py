@@ -145,28 +145,6 @@ def affinity_supervised(X, Y, between_class_affinity):
     return S
 
 
-# given the matrix A in St(p, n), complete it into Q = [A B] in SO(n)
-def Complete_SpecialOrthogonal(A):
-    # first turn the matrix A into an array
-    A = np.array(A)
-    # the number of rows in A
-    n = len(A)
-    # the number of columns in A
-    p = len(A[0])
-    # full svd decomposition of A
-    O1, D, O2 = np.linalg.svd(A, full_matrices=True)
-    D = np.diag(D)
-    # extend O2 to O2_ext = [O2 zeros(p, n-p); zeros(n-p, p) eye(n-p)]
-    O2_ext = np.pad(O2, ((0,n-p),(0,n-p)), 'constant', constant_values = (0,0))
-    for j in range(n-p):
-        O2_ext[p+j][p+j]=1
-    # compute Q = O1 * O2_ext, if det(Q)=-1, make it +1 
-    Q = np.matmul(O1, O2_ext)
-    if np.linalg.det(Q)<0:
-        Q[0:n-1, p] = -Q[0:n-1, p]
-    return Q
-
-
 # Sample a training dataset data_train from the data_original_train set, data_train = (data_train["x"], data_train["y"])
 # Set the partition tree depth = ht
 # Tree partition data_train into clusters C_1, ..., C_{2^{ht}} with centers m_1, ..., m_{2^{ht}}
@@ -250,11 +228,24 @@ def LPP_BuildDataModel(data_train, leafs, kd_PCA, kd_LPP):
         # form the data_train subsample the k-th cluster
         data_train_x_k = [data_train["x"][_] for _ in leafs[k]]
         data_train_y_k = [data_train["y"][_] for _ in leafs[k]]
+        # augment the data_train_x_k and data_train_y_k by GMM sampling and pre-trained learning model prediction
+        doAugment = 1
+        if doAugment:
+            # bulid a Gaussian mixture model on data_train_x_k
+            # sample from this GMM enough number of training data points, form data_train_x_k
+            # use the pre-trained learning model, predict labels for the newly generated training set
+            number_samples_additional = 200
+            learning_model = 0
+            data_train_x_k_additional, data_train_y_k_additional = GMM_TrainingDataAugmentation(data_train_x_k, 
+                                                                                                data_train_y_k, 
+                                                                                                number_samples_additional, 
+                                                                                                learning_model)
+            data_train_x_k.extend(data_train_x_k_additional)
+            data_train_y_k.extend(data_train_y_k_additional)
         # do an initial PCA first, for the k-th cluster, so data_train_x_k dimension is reduced to kd_PCA
         pca = PCA()
         pca.fit(data_train_x_k)
         PCA_k = pca.components_
-        PCA_k = Complete_SpecialOrthogonal(PCA_k.T).T
         data_train_x_k = np.matmul(data_train_x_k, np.array([PCA_k[_] for _ in range(kd_PCA)]).T)
         # then do LPP for the PCA embedded data_train_x_k and reduce the dimension to kd_LPP
         # construct the supervise affinity matrix S
@@ -288,11 +279,11 @@ def LPP_NearestNeighborTest():
     # the LPP embedding dimension = kd_LPP
     kd_LPP = 100
     # train_size = the training data size
-    train_size = 150*(2**8)
+    train_size = 100*(2**8)
     # ht = the partition tree height
     ht = 8
     # test_size = the test data size
-    test_size = 10000
+    test_size = 1000
 
     # obtain the train, test sets in nwpu and the LPP frames Seq(:,:,k) for each cluster with indexes in leafs
     data_train, leafs, data_test = LPP_ObtainData(data_original_train, data_original_test, d_pre, kd_LPP, kd_PCA, train_size, test_size, ht)
@@ -431,13 +422,19 @@ def LPP_NearestNeighborTest():
 # fit from them a GMM model and sample from this GMM model a given number of additional training samples training_data_additional_x 
 # with training_data_additional_x, using a pre-trained learning_model, label each additional sample and produce corresponding labels training_data_additional_y
 def GMM_TrainingDataAugmentation(training_data_original_x, training_data_original_y, number_samples_additional, learning_model):
-    
-    # first detect the dimension of the inputs x in training data
-    kd_data = len(training_data_original_x[0])
-    # initialize training_data_additional_x and training_data_additional_y
-    training_data_additional_x = np.zeros((number_samples_additional, kd_data))
-    training_data_additional_y = np.zeros(number_samples_additional)
-    
+
+    # obtain the number of different labels in training_data_original_y
+    num_classes = len(set(training_data_original_y))
+
+    # fit train_data_original_x using a GMM model
+    from sklearn.mixture import GaussianMixture
+    gmm = GaussianMixture(n_components=num_classes).fit(training_data_original_x)
+
+    # using GMM, generate an additional set of training_data_additional_x and predict training_data_additional_y
+    training_data_additional_x_, y = gmm.sample(number_samples_additional)
+    training_data_additional_y = (gmm.predict(training_data_additional_x_)).tolist()
+    training_data_additional_x = [np.array(training_data_additional_x_[_]) for _ in range(number_samples_additional)]
+  
     return training_data_additional_x, training_data_additional_y
 
 
@@ -446,7 +443,7 @@ def GMM_TrainingDataAugmentation(training_data_original_x, training_data_origina
 class model_vgg16_cifar10:
     
     def __init__(self):
-        
+        self.a=0
 
 
 
