@@ -41,7 +41,7 @@ from keras import backend as K
 from keras import regularizers
 
 class cifar10vgg:
-    def __init__(self,train=False):
+    def __init__(self, train=False):
         self.num_classes = 10
         self.weight_decay = 0.0005
         self.x_shape = [32,32,3]
@@ -50,7 +50,7 @@ class cifar10vgg:
         if train:
             self.model = self.train(self.model)
         else:
-            self.model.load_weights('/home/huwen/文档/work_SubspaceIndexingStiefleGrassmann/Code_Subspace_indexing_Stiefel_Grassman/PythonCode_Subspace_indexing_Stiefel_Grassman/cifar10vgg.h5')
+            self.model.load_weights('/home/huwen/文档/work_cs_SubspaceIndexingStiefleGrassmann/Code_Subspace_indexing_Stiefel_Grassman/PythonCode_Subspace_indexing_Stiefel_Grassman/cifar10vgg.h5')
 
 
     def build_model(self):

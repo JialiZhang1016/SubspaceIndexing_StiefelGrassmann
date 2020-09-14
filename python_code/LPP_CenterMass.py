@@ -77,20 +77,17 @@ def knn(x_test, y_test, X_train, Y_train, k):
         k=m
     # find the first k-nearest neighbor
     dist = [np.linalg.norm(np.array(x_test)-np.array(X_train[i])) for i in range(m)]
-    #print(dist)
     indexes, dist_sort = zip(*sorted(enumerate(dist), key=itemgetter(1))) 
-    #print(indexes, dist_sort)
     # do a majority vote on the first k-nearest neighbor
     label = [Y_train[indexes[_]] for _ in range(k)]
     vote = pd.value_counts(label)
-    #print(vote)
     # class_predict is the predicted label based on majority vote
     class_predict = vote.index[0]
     if class_predict == y_test:
         isclassified = 1
     else:
         isclassified = 0
-    return isclassified
+    return isclassified, class_predict
 
 
 # solve the laplacian embedding, given data set X={x1,...,xm}, the graph laplacian L and degree matrix D    
@@ -106,7 +103,7 @@ def LPP(X, L, D):
     # solve the generalized eigenvalue problem mtx_L W = LAMBDA mtx_D W
     LAMBDA, W = eigh(mtx_L, mtx_D, eigvals_only=False)
     # sort the eigenvalues in a descending order
-    SORT_ORDER, LAMBDA = zip(*sorted(enumerate(LAMBDA), key=itemgetter(1), reverse=True)) 
+    SORT_ORDER, LAMBDA = zip(*sorted(enumerate(LAMBDA), key=itemgetter(1), reverse=False)) 
     # reorder the generalized eigenvector matrix W according to SORT_ORDER
     W = [W[SORT_ORDER[_]] for _ in range(len(SORT_ORDER))]
     return W, LAMBDA 
@@ -130,12 +127,10 @@ def affinity_supervised(X, Y, between_class_affinity):
     mdist = np.mean(f_dist1) 
     h = -np.log(0.15)/mdist
     S1 = np.exp(-h*f_dist1)
-    #print("S1=", S1)
     # utilize supervised info
     # first turn Y into a 2-d array
     Y = [[Y[_]] for _ in range(len(Y))]
     id_dist = cdist(Y, Y, 'euclidean')
-    #print("id_dist=", id_dist)
     S2 = S1 
     for i in range(len(X)):
         for j in range(len(X)):
@@ -165,16 +160,19 @@ def LPP_ObtainData(data_original_train, data_original_test, d_pre, kd_LPP, kd_PC
     # compute the sizes of the original training and testing dataset
     n_data_original_train = len(data_original_train["x"]) 
     n_data_original_test = len(data_original_test["x"])
-
-    # first concatnate data_original_train["x"] and data_original_test["x"] together
-    data_x = np.array(data_original_train["x"] + data_original_test["x"])
-    # do an initial PCA on data
-    pca = PCA()
-    pca.fit(data_x)
-    A0 = pca.components_
-    # bulid a given dimensional d_pre embedding of data_orginal_train(test).x into new data_original_train(test).x, for faster computation only
-    data_original_train["x"] = np.matmul(data_original_train["x"], np.array([A0[_] for _ in range(d_pre)]).T)
-    data_original_test["x"] = np.matmul(data_original_test["x"], np.array([A0[_] for _ in range(d_pre)]).T)
+    
+    # choose to do preliminary dimension reduction for computational feasability only
+    do_preliminary_reduction = 0
+    if do_preliminary_reduction:
+        # first concatnate data_original_train["x"] and data_original_test["x"] together
+        data_x = np.array(data_original_train["x"] + data_original_test["x"])
+        # do an initial PCA on data
+        pca = PCA()
+        pca.fit(data_x)
+        A0 = pca.components_
+        # bulid a given dimensional d_pre embedding of data_orginal_train(test).x into new data_original_train(test).x, for faster computation only
+        data_original_train["x"] = np.matmul(data_original_train["x"], np.array([A0[_] for _ in range(d_pre)]).T)
+        data_original_test["x"] = np.matmul(data_original_test["x"], np.array([A0[_] for _ in range(d_pre)]).T)
     
     # build the training data set
     indexes = np.random.permutation(n_data_original_train) 
@@ -235,8 +233,8 @@ def LPP_BuildDataModel(data_train, leafs, kd_PCA, kd_LPP):
             # bulid a Gaussian mixture model on data_train_x_k
             # sample from this GMM enough number of training data points, form data_train_x_k
             # use the pre-trained learning model, predict labels for the newly generated training set
-            number_samples_additional = 200
-            learning_model = 'cifar10vgg'
+            number_samples_additional = 200 # the number of additional samples
+            learning_model = 'cifar10vgg' #'GMM' # the pre-trained learning model
             data_train_x_k_additional, data_train_y_k_additional = GMM_TrainingDataAugmentation(data_train_x_k, 
                                                                                                 data_train_y_k, 
                                                                                                 number_samples_additional, 
@@ -258,7 +256,7 @@ def LPP_BuildDataModel(data_train, leafs, kd_PCA, kd_LPP):
         A_k, LAMBDA = LPP(data_train_x_k, L_k, D_k)
         LPP_k, R = np.linalg.qr(A_k)        
         # obtain the frame Seq(:,:,k)
-        Seq[k] = np.matmul(np.array([PCA_k[_] for _ in range(kd_PCA)]).T, np.array([LPP_k[_] for _ in range(kd_LPP)]).T)
+        Seq[k] = np.matmul(np.array([PCA_k[_] for _ in range(kd_PCA)]).T, np.array([LPP_k[_] for _ in range(1, kd_LPP+1)]).T)
         print("frame ",k+1," size=(", len(Seq[k]),",",len(Seq[k][0]), "), Stiefel = ", np.linalg.norm(np.array(np.matmul(Seq[k].T, Seq[k]))-np.array(np.diag(np.ones(kd_LPP)))))
 
     return Seq
@@ -280,11 +278,11 @@ def LPP_NearestNeighborTest():
     # the LPP embedding dimension = kd_LPP
     kd_LPP = 100
     # train_size = the training data size
-    train_size = 12*(2**11)
+    train_size = 100 * (2**8)
     # ht = the partition tree height
-    ht = 11
+    ht = 8
     # test_size = the test data size
-    test_size = 1000
+    test_size = 100
 
     # obtain the train, test sets in nwpu and the LPP frames Seq(:,:,k) for each cluster with indexes in leafs
     data_train, leafs, data_test = LPP_ObtainData(data_original_train, data_original_test, d_pre, kd_LPP, kd_PCA, train_size, test_size, ht)
@@ -304,7 +302,7 @@ def LPP_NearestNeighborTest():
 
     # set the sequence of interpolation numbers and the threshold ratio for determining the interpolation number
     interpolation_number_seq = np.ones(test_size)
-    ratio_threshold = 1.1 # the ratio for determinining the interpolation_number, serve as a tuning parameter
+    ratio_threshold = 1.2 # the ratio for determinining the interpolation_number, serve as a tuning parameter
     ratio_seq = np.zeros((test_size, 2)) # the sequence of second smallest (or largest) to-center distance over smallest to-center distance, for tuning ratio_threshold
    
     K = 1e-8 # the scaling coefficient for calculating the weights w = e^{-K distance^2}
@@ -323,7 +321,6 @@ def LPP_NearestNeighborTest():
     for test_index in range(test_size):
         print("\ntest point", test_index+1, " -----------------------------------------------------------\n")
         x = data_test["x"][test_index]
-        #print("norm x = ", np.linalg.norm(x))
         y = data_test["y"][test_index]
         # sort the cluster centers m_1, ..., m_{2^{ht}} by ascending distances to x 
         dist = [np.linalg.norm(x-m[k]) for k in range(2**ht)]
@@ -352,27 +349,26 @@ def LPP_NearestNeighborTest():
         aggregate_cluster = []
         for i in range(interpolation_number):
             aggregate_cluster = list(set(aggregate_cluster) | set(leafs[indexes[i]]))
-        #print("aggregate_cluster=", aggregate_cluster)
         # do k-nearest-neighbor classification based on the closest cluster to x, in original space
         x_test = x
         y_test = y
         X_train = [data_train["x"][_] for _ in leafs[indexes[0]]]
         Y_train = [data_train["y"][_] for _ in leafs[indexes[0]]]
-        isclassified_o = knn(x_test, y_test, X_train, Y_train, k_nearest_neighbor)
+        isclassified_o, class_predict = knn(x_test, y_test, X_train, Y_train, k_nearest_neighbor)
         classified_o[test_index] = isclassified_o
         # do k-nearest-neighbor classification based on the (interpolation_number) nearest clusters to x, in oroginal space
         x_test = x
         y_test = y
         X_train = [data_train["x"][_] for _ in aggregate_cluster]
         Y_train = [data_train["y"][_] for _ in aggregate_cluster]
-        isclassified_agg_o = knn(x_test, y_test, X_train, Y_train, k_nearest_neighbor)
+        isclassified_agg_o, class_predict = knn(x_test, y_test, X_train, Y_train, k_nearest_neighbor)
         classified_agg_o[test_index] = isclassified_agg_o
         # project x to A1 x and classify it using k-nearest-neighbor on the projection via A1 of the closest cluster
         x_test = np.matmul(x, frames[0])
         y_test = y
         X_train = [np.matmul(data_train["x"][_],  frames[0]) for _ in leafs[indexes[0]]]
         Y_train = [data_train["y"][_] for _ in leafs[indexes[0]]]
-        isclassified_bm = knn(x_test, y_test, X_train, Y_train, k_nearest_neighbor)
+        isclassified_bm, class_predict = knn(x_test, y_test, X_train, Y_train, k_nearest_neighbor)
         classified_bm[test_index] = isclassified_bm
         # calculate the center of mass for the (interpolation_number) nearest cluster LPP frames with respect to weights w 
         threshold_gradnorm = 1e-4
@@ -402,10 +398,10 @@ def LPP_NearestNeighborTest():
         y_test = y
         X_train = [np.matmul(data_train["x"][_], center) for _ in aggregate_cluster]
         Y_train = [data_train["y"][_] for _ in aggregate_cluster]    
-        isclassified_c = knn(x_test, y_test, X_train, Y_train, k_nearest_neighbor)
+        isclassified_c, class_predict = knn(x_test, y_test, X_train, Y_train, k_nearest_neighbor)
         classified_c[test_index] = isclassified_c
         # output the result
-        print("benchmark classified = ",  isclassified_bm, " center mass classfied =", isclassified_c)
+        print("original dimension classified =", isclassified_o, ", original dimension aggregate classified =", isclassified_agg_o, ", benchmark classified =", isclassified_bm, ", center mass classfied =", isclassified_c)
 
     # summarize the final result
     cpu_time_end = time.process_time()
@@ -434,11 +430,18 @@ def GMM_TrainingDataAugmentation(training_data_original_x, training_data_origina
     # using GMM, generate an additional set of training_data_additional_x and predict training_data_additional_y
     training_data_additional_x_, y = gmm.sample(number_samples_additional)
     if learning_model == 'cifar10vgg':
+        model = cifar10vgg()
+        training_data_additional_x__ = np.reshape(training_data_additional_x_.flatten(), (200, 32, 32, 3))
+        predicted_x = model.predict(training_data_additional_x__)
+        training_data_additional_y = np.argmax(predicted_x, 1)
+    elif learning_model == 'GMM':
         training_data_additional_y = (gmm.predict(training_data_additional_x_)).tolist()
     else:
-        training_data_additional_y = (gmm.predict(training_data_additional_x_)).tolist()        
+        print("No Pre-Trained Learning Model Chosen!\n")
+        return None
+
     training_data_additional_x = [np.array(training_data_additional_x_[_]) for _ in range(number_samples_additional)]
-  
+        
     return training_data_additional_x, training_data_additional_y
 
 
