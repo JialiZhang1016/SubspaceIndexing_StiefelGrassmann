@@ -170,13 +170,15 @@ def LPP_ObtainData(data_original_train, data_original_test, d_pre, kd_LPP, kd_PC
         pca = PCA()
         pca.fit(data_x)
         A0 = pca.components_
-        PCA_pre = np.array([A0[_] for _ in range(d_pre)]).T
         # bulid a given dimensional d_pre embedding of data_orginal_train(test).x into new data_original_train(test).x, for faster computation only
-        data_original_train["x"] = np.matmul(data_original_train["x"], PCA_pre)
-        data_original_test["x"] = np.matmul(data_original_test["x"], PCA_pre)
+        data_original_train["x"] = np.matmul(data_original_train["x"], np.array([A0[_] for _ in range(d_pre)]).T)
+        data_original_test["x"] = np.matmul(data_original_test["x"], np.array([A0[_] for _ in range(d_pre)]).T)
+        # record the pseudo-inverse map that helps to recover the low-dimensional data to original data dimension
+        inv_mat = np.linalg.pinv(np.array([A0[_] for _ in range(d_pre)]).T)
     else:
+        # record the pseudo-inverse map that helps to recover the low-dimensional data to original data dimension
         kd_data = len(data_original_train["x"][0])
-        PCA_pre = np.identity(kd_data, dtype=float)
+        inv_mat = np.identity(kd_data, dtype=float)
     
     # build the training data set
     indexes = np.random.permutation(n_data_original_train) 
@@ -205,14 +207,14 @@ def LPP_ObtainData(data_original_train, data_original_test, d_pre, kd_LPP, kd_PC
     # from x0, partition into 2^ht leaf nodes, each leaf node can give samples for a local LPP
     indx, leafs, mbrs = buildVisualWordList(x0, ht)
     
-    return data_train, leafs, data_test, PCA_pre
+    return data_train, leafs, data_test, inv_mat
 
 
 # build LPP Model for each leaf in data_train
 # Assume the tree partition indexes of data_train into clusters C_1, ..., C_{2^{ht}} with centers m_1, ..., m_{2^{ht}} is given in leafs
 # first project each C_i to local PCA with dimension kd_PCA  
 # then continue to construct the local LPP frames A_1, ..., A_{2^{ht}} in G(kd_data, kd_LPP) using supervised affinity
-def LPP_BuildDataModel(data_train, leafs, kd_PCA, kd_LPP, PCA_pre):
+def LPP_BuildDataModel(data_train, leafs, kd_PCA, kd_LPP, inv_mat):
     # Input:
     #   data_train = the training data set
     #   leafs = the tree partition indexes of data_train into clusters C_1, ..., C_{2^{ht}}
@@ -243,7 +245,7 @@ def LPP_BuildDataModel(data_train, leafs, kd_PCA, kd_LPP, PCA_pre):
                                                                                                 data_train_y_k, 
                                                                                                 number_samples_additional, 
                                                                                                 learning_model,
-                                                                                                PCA_pre)
+                                                                                                inv_mat)
             data_train_x_k.extend(data_train_x_k_additional)
             data_train_y_k.extend(data_train_y_k_additional)
         # do an initial PCA first, for the k-th cluster, so data_train_x_k dimension is reduced to kd_PCA
@@ -283,15 +285,15 @@ def LPP_NearestNeighborTest():
     # the LPP embedding dimension = kd_LPP
     kd_LPP = 100
     # train_size = the training data size
-    train_size = 50 * (2**9)
+    train_size = 400 * (2**6)
     # ht = the partition tree height
-    ht = 9
+    ht = 6
     # test_size = the test data size
     test_size = 100
 
     # obtain the train, test sets in nwpu and the LPP frames Seq(:,:,k) for each cluster with indexes in leafs
-    data_train, leafs, data_test, PCA_pre = LPP_ObtainData(data_original_train, data_original_test, d_pre, kd_LPP, kd_PCA, train_size, test_size, ht)
-    Seq = LPP_BuildDataModel(data_train, leafs, kd_PCA, kd_LPP, PCA_pre)
+    data_train, leafs, data_test, inv_mat = LPP_ObtainData(data_original_train, data_original_test, d_pre, kd_LPP, kd_PCA, train_size, test_size, ht)
+    Seq = LPP_BuildDataModel(data_train, leafs, kd_PCA, kd_LPP, inv_mat)
 
     # all these LPP Stiefel frames are on St(n, p)
     n = len(Seq[0])
@@ -423,10 +425,7 @@ def LPP_NearestNeighborTest():
 # given a set of training_data_original_x with labels training_data_original_y
 # fit from them a GMM model and sample from this GMM model a given number of additional training samples training_data_additional_x 
 # with training_data_additional_x, using a pre-trained learning_model, label each additional sample and produce corresponding labels training_data_additional_y
-def GMM_TrainingDataAugmentation(training_data_original_x, training_data_original_y, number_samples_additional, learning_model, PCA_pre):
-
-    # calculate the psudo-inverse of PCA_pre
-    inv_mat = np.linalg.pinv(PCA_pre)
+def GMM_TrainingDataAugmentation(training_data_original_x, training_data_original_y, number_samples_additional, learning_model, inv_mat):
     
     # obtain the number of different labels in training_data_original_y
     num_classes = len(set(training_data_original_y))
