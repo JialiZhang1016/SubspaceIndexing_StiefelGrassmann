@@ -20,6 +20,76 @@ import tensorflow as tf
 import time
 from cifar10vgg import cifar10vgg
 
+# set the pre-trained learning models
+model_cifar10vgg = cifar10vgg()
+
+#################################################################################################################################################
+############################################ set all parameters needed in the code for easier tuning ############################################
+#################################################################################################################################################
+
+# choose to do preliminary PCA dimension reduction to d_PCA for computational feasability only
+do_preliminary_PCA_reduction = 1
+# choose to do a PCA for each cluster to dimension d_second_PCA before do LPP on that cluster
+doSecondPCA_beforeLPP = 0
+# choose to do another PCA to dimension d_second_PCA before do kd-tree decomposition
+doSecondPCA_kdtree = 0
+
+# select which dataset to work on
+doMNIST = 0
+doCIFAR10 = 1
+# the data preprocessing preliminary PCA reduction projection dimension
+d_PCA = 1024
+# the secondary PCA embedding dimension = d_second_PCA
+# used in 2 cases :
+#   (1) choose to do a second PCA to dimension d_second_PCA before the kd-tree decomposition into clusters
+#   (2) choose to do a second PCA for each cluster to dimension d_second_PCA before do LPP on that cluster
+d_second_PCA = 256
+# the LPP embedding dimension = d_LPP on each given cluster
+d_LPP = 512
+# train_size = the training data size
+train_size = 150 * (2**8)
+# ht = the partition tree height
+ht = 8
+# test_size = the test data size
+test_size = 100
+
+# choose to augment the data_train_x_k and data_train_y_k by GMM sampling and pre-trained learning model prediction
+doAugment = 1
+# the number of additional samples, in case we do augment training data
+number_samples_additional = 2000 
+# pick the pre-trained learning model for augmentation
+doCIFAR10vgg = 1
+doGMM = 0
+if doCIFAR10vgg:
+    learning_model = 'cifar10vgg'  
+elif doGMM:
+    learning_model = 'GMM' 
+else:
+    learning_model = 'NoModel'
+
+# the ratio for determinining the interpolation_number, serve as a tuning parameter
+ratio_threshold = 1.2 
+# the scaling coefficient for calculating the weights w = e^{-K distance^2}
+K = 1e-8 
+# the parameter k for k-nearest-neighbor classification
+k_nearest_neighbor = 1 
+# do or do not do projected Frobenius center of mass for Grassmannian frame    
+doGrassmannpFCenter = 0 
+# do or do not do Euclid center of mass for Stiefel frame     
+doStiefelEuclidCenter = 1 
+# do or do not do GD for finding center of mass     
+doGD = 0 
+# threshold parameters for Stiefel and Grassmann Optimization
+threshold_gradnorm = 1e-4
+threshold_fixedpoint = 1e-4
+threshold_checkonGrassmann = 1e-10
+threshold_checkonStiefel = 1e-10
+threshold_logStiefel = 1e-4
+
+#################################################################################################################################################
+############################################             end of parameter setting                    ############################################
+#################################################################################################################################################
+
 
 # load the data set, nwpu-aerial-images, MNIST or CIFAR-10
 def load_data(doMNIST, doCIFAR10):
@@ -145,12 +215,12 @@ def affinity_supervised(X, Y, between_class_affinity):
 # Set the partition tree depth = ht
 # Tree partition data_train into clusters C_1, ..., C_{2^{ht}} with centers m_1, ..., m_{2^{ht}}
 # Sample a test dataset data_test from the data_original_test set for testing purposes, data_test = (data_test["x"], data_test["y"])
-def LPP_ObtainData(data_original_train, data_original_test, d_pre, kd_LPP, kd_PCA, train_size, test_size, ht):
+def LPP_ObtainData(data_original_train, data_original_test, d_PCA, d_LPP, d_second_PCA, train_size, test_size, ht):
     # Input
     #   data = the original data set, in the python code we treat it as a dictionary data={"x": [inputs], "y": [labels]}
-    #   d_pre = the data preprocessing projection dimension
-    #   kd_PCA = the initial PCA embedding dimension
-    #   kd_LPP = the LPP embedding dimension 
+    #   d_PCA = the data preprocessing PCA projection dimension
+    #   d_second_PCA = the second level PCA embedding dimension
+    #   d_LPP = the LPP embedding dimension 
     #   train_size, test_size = the training/testing data set size
     #   ht = the partition tree height
     # Output
@@ -162,19 +232,18 @@ def LPP_ObtainData(data_original_train, data_original_test, d_pre, kd_LPP, kd_PC
     n_data_original_test = len(data_original_test["x"])
     
     # choose to do preliminary dimension reduction for computational feasability only
-    do_preliminary_reduction = 1
-    if do_preliminary_reduction:
+    if do_preliminary_PCA_reduction:
         # first concatnate data_original_train["x"] and data_original_test["x"] together
         data_x = np.array(data_original_train["x"] + data_original_test["x"])
         # do an initial PCA on data
         pca = PCA()
         pca.fit(data_x)
         A0 = pca.components_
-        # bulid a given dimensional d_pre embedding of data_orginal_train(test).x into new data_original_train(test).x, for faster computation only
-        data_original_train["x"] = np.matmul(data_original_train["x"], np.array([A0[_] for _ in range(d_pre)]).T)
-        data_original_test["x"] = np.matmul(data_original_test["x"], np.array([A0[_] for _ in range(d_pre)]).T)
+        # bulid a given dimensional d_PCA embedding of data_orginal_train(test).x into new data_original_train(test).x, for faster computation only
+        data_original_train["x"] = np.matmul(data_original_train["x"], np.array([A0[_] for _ in range(d_PCA)]).T)
+        data_original_test["x"] = np.matmul(data_original_test["x"], np.array([A0[_] for _ in range(d_PCA)]).T)
         # record the pseudo-inverse map that helps to recover the low-dimensional data to original data dimension
-        inv_mat = np.linalg.pinv(np.array([A0[_] for _ in range(d_pre)]).T)
+        inv_mat = np.linalg.pinv(np.array([A0[_] for _ in range(d_PCA)]).T)
     else:
         # record the pseudo-inverse map that helps to recover the low-dimensional data to original data dimension
         kd_data = len(data_original_train["x"][0])
@@ -198,35 +267,40 @@ def LPP_ObtainData(data_original_train, data_original_test, d_pre, kd_LPP, kd_PC
     data_test_y = [data_original_test["y"][_] for _ in test_indexes]
     data_test = {"x": data_test_x, "y": data_test_y}
     
-    # do an initial PCA on data_train
-    pca = PCA()
-    pca.fit(data_train_x)
-    A0 = pca.components_
-    # bulid a kd_PCA dimensional embedding of data_train in x0
-    x0 = np.matmul(data_train_x, np.array([A0[_] for _ in range(kd_PCA)]).T)
-    # from x0, partition into 2^ht leaf nodes, each leaf node can give samples for a local LPP
-    indx, leafs, mbrs = buildVisualWordList(x0, ht)
+    # choose to do a second level PCA to dimension d_second_PCA before the kd-tree decomposition
+    if doSecondPCA_kdtree:
+        # do another initial PCA on data_train to d_second_PCA
+        pca = PCA()
+        pca.fit(data_train_x)
+        A0 = pca.components_
+        # bulid a d_second_PCA dimensional embedding of data_train in x0
+        x0 = np.matmul(data_train_x, np.array([A0[_] for _ in range(d_second_PCA)]).T)
+        # from x0, partition into 2^ht leaf nodes, each leaf node can give samples for a local LPP
+        indx, leafs, mbrs = buildVisualWordList(x0, ht)
+    else:
+        # from data_train_x, partition into 2^ht leaf nodes, each leaf node can give samples for a local LPP
+        indx, leafs, mbrs = buildVisualWordList(data_train_x, ht)
     
     return data_train, leafs, data_test, inv_mat
 
 
 # build LPP Model for each leaf in data_train
 # Assume the tree partition indexes of data_train into clusters C_1, ..., C_{2^{ht}} with centers m_1, ..., m_{2^{ht}} is given in leafs
-# first project each C_i to local PCA with dimension kd_PCA  
-# then continue to construct the local LPP frames A_1, ..., A_{2^{ht}} in G(kd_data, kd_LPP) using supervised affinity
-def LPP_BuildDataModel(data_train, leafs, kd_PCA, kd_LPP, inv_mat):
+# first project each C_i to local PCA with dimension d_second_PCA  
+# then continue to construct the local LPP frames A_1, ..., A_{2^{ht}} in G(kd_data, d_LPP) using supervised affinity
+def LPP_BuildDataModel(data_train, leafs, d_second_PCA, d_LPP, inv_mat):
     # Input:
     #   data_train = the training data set
     #   leafs = the tree partition indexes of data_train into clusters C_1, ..., C_{2^{ht}}
-    #   kd_PCA = the initial PCA embedding dimension
-    #   kd_LPP = the LPP embedding dimension 
+    #   d_second_PCA = the second-level PCA embedding dimension
+    #   d_LPP = the LPP embedding dimension 
     # Output:
     #   Seq = the LPP frames corresponding to each cluster in data_train, labeling the correponding Grassmann equivalence class
 
     # obtain the dimension of each sample in data_train["x"]
     kd_data = len(data_train["x"][0])
     # initialize the LPP frames A_1,...,A_{2^{ht}}
-    Seq = np.zeros((len(leafs), kd_data, kd_LPP))
+    Seq = np.zeros((len(leafs), kd_data, d_LPP))
     # build LPP Model for each leaf
     # input: data, indx, leafs
     for k in range(len(leafs)):
@@ -234,13 +308,10 @@ def LPP_BuildDataModel(data_train, leafs, kd_PCA, kd_LPP, inv_mat):
         data_train_x_k = [data_train["x"][_] for _ in leafs[k]]
         data_train_y_k = [data_train["y"][_] for _ in leafs[k]]
         # augment the data_train_x_k and data_train_y_k by GMM sampling and pre-trained learning model prediction
-        doAugment = 1
         if doAugment:
             # bulid a Gaussian mixture model on data_train_x_k
             # sample from this GMM enough number of training data points, form data_train_x_k
             # use the pre-trained learning model, predict labels for the newly generated training set
-            number_samples_additional = 200 # the number of additional samples
-            learning_model = 'cifar10vgg' #'GMM' # the pre-trained learning model
             data_train_x_k_additional, data_train_y_k_additional = GMM_TrainingDataAugmentation(data_train_x_k, 
                                                                                                 data_train_y_k, 
                                                                                                 number_samples_additional, 
@@ -248,24 +319,39 @@ def LPP_BuildDataModel(data_train, leafs, kd_PCA, kd_LPP, inv_mat):
                                                                                                 inv_mat)
             data_train_x_k.extend(data_train_x_k_additional)
             data_train_y_k.extend(data_train_y_k_additional)
-        # do an initial PCA first, for the k-th cluster, so data_train_x_k dimension is reduced to kd_PCA
-        pca = PCA()
-        pca.fit(data_train_x_k)
-        PCA_k = pca.components_
-        data_train_x_k = np.matmul(data_train_x_k, np.array([PCA_k[_] for _ in range(kd_PCA)]).T)
-        # then do LPP for the PCA embedded data_train_x_k and reduce the dimension to kd_LPP
-        # construct the supervise affinity matrix S
-        between_class_affinity = 0
-        S_k = affinity_supervised(data_train_x_k, data_train_y_k, between_class_affinity)
-        # construct the graph Laplacian L and degree matrix D
-        L_k, D_k = graph_laplacian(S_k)
-        # do LPP
-        A_k, LAMBDA = LPP(data_train_x_k, L_k, D_k)
-        LPP_k, R = np.linalg.qr(A_k)        
-        # obtain the frame Seq(:,:,k)
-        Seq[k] = np.matmul(np.array([PCA_k[_] for _ in range(kd_PCA)]).T, np.array([LPP_k[_] for _ in range(1, kd_LPP+1)]).T)
-        print("frame ",k+1," size=(", len(Seq[k]),",",len(Seq[k][0]), "), Stiefel = ", np.linalg.norm(np.array(np.matmul(Seq[k].T, Seq[k]))-np.array(np.diag(np.ones(kd_LPP)))))
 
+        if doSecondPCA_beforeLPP:
+            # do a second-level PCA first, for the k-th cluster, so data_train_x_k dimension is reduced to d_second_PCA
+            pca = PCA()
+            pca.fit(data_train_x_k)
+            PCA_k = pca.components_
+            data_train_x_k = np.matmul(data_train_x_k, np.array([PCA_k[_] for _ in range(d_second_PCA)]).T)
+            # then do LPP for the PCA embedded data_train_x_k and reduce the dimension to d_LPP
+            # construct the supervise affinity matrix S
+            between_class_affinity = 0
+            S_k = affinity_supervised(data_train_x_k, data_train_y_k, between_class_affinity)
+            # construct the graph Laplacian L and degree matrix D
+            L_k, D_k = graph_laplacian(S_k)
+            # do LPP
+            A_k, LAMBDA = LPP(data_train_x_k, L_k, D_k)
+            LPP_k, R = np.linalg.qr(A_k)        
+            # obtain the frame Seq(:,:,k)
+            Seq[k] = np.matmul(np.array([PCA_k[_] for _ in range(d_second_PCA)]).T, np.array([LPP_k[_] for _ in range(1, d_LPP+1)]).T)
+            print("frame ",k+1," size=(", len(Seq[k]),",",len(Seq[k][0]), "), IfStiefel? Residue = ", np.linalg.norm(np.array(np.matmul(Seq[k].T, Seq[k]))-np.array(np.diag(np.ones(d_LPP)))))
+        else:
+            # do LPP directly to data_train_x_k and reduce the dimension to d_LPP
+            # construct the supervise affinity matrix S
+            between_class_affinity = 0
+            S_k = affinity_supervised(data_train_x_k, data_train_y_k, between_class_affinity)
+            # construct the graph Laplacian L and degree matrix D
+            L_k, D_k = graph_laplacian(S_k)
+            # do LPP
+            A_k, LAMBDA = LPP(data_train_x_k, L_k, D_k)
+            LPP_k, R = np.linalg.qr(A_k)        
+            # obtain the frame Seq(:,:,k)
+            Seq[k] = np.array([LPP_k[_] for _ in range(1, d_LPP+1)]).T
+            print("frame ",k+1," size=(", len(Seq[k]),",",len(Seq[k][0]), "), IfStiefel? Residue = ", np.linalg.norm(np.array(np.matmul(Seq[k].T, Seq[k]))-np.array(np.diag(np.ones(d_LPP)))))
+            
     return Seq
 
 
@@ -273,27 +359,13 @@ def LPP_BuildDataModel(data_train, leafs, kd_PCA, kd_LPP, inv_mat):
 # Using k-nearest neighbor classification method
 # Also compare with the nearest neighbor classification in the original dimension
 def LPP_NearestNeighborTest():
-    # select which dataset to work on
-    doMNIST = 0
-    doCIFAR10 = 1
+
     # load data
     data_original_train, data_original_test = load_data(doMNIST, doCIFAR10)
-    # the data preprocessing projection dimension
-    d_pre = 256
-    # the PCA embedding dimension = kd_PCA
-    kd_PCA = 128
-    # the LPP embedding dimension = kd_LPP
-    kd_LPP = 100
-    # train_size = the training data size
-    train_size = 400 * (2**6)
-    # ht = the partition tree height
-    ht = 6
-    # test_size = the test data size
-    test_size = 100
 
     # obtain the train, test sets in nwpu and the LPP frames Seq(:,:,k) for each cluster with indexes in leafs
-    data_train, leafs, data_test, inv_mat = LPP_ObtainData(data_original_train, data_original_test, d_pre, kd_LPP, kd_PCA, train_size, test_size, ht)
-    Seq = LPP_BuildDataModel(data_train, leafs, kd_PCA, kd_LPP, inv_mat)
+    data_train, leafs, data_test, inv_mat = LPP_ObtainData(data_original_train, data_original_test, d_PCA, d_LPP, d_second_PCA, train_size, test_size, ht)
+    Seq = LPP_BuildDataModel(data_train, leafs, d_second_PCA, d_LPP, inv_mat)
 
     # all these LPP Stiefel frames are on St(n, p)
     n = len(Seq[0])
@@ -309,20 +381,12 @@ def LPP_NearestNeighborTest():
 
     # set the sequence of interpolation numbers and the threshold ratio for determining the interpolation number
     interpolation_number_seq = np.ones(test_size)
-    ratio_threshold = 1.2 # the ratio for determinining the interpolation_number, serve as a tuning parameter
     ratio_seq = np.zeros((test_size, 2)) # the sequence of second smallest (or largest) to-center distance over smallest to-center distance, for tuning ratio_threshold
-   
-    K = 1e-8 # the scaling coefficient for calculating the weights w = e^{-K distance^2}
-    k_nearest_neighbor = 1 # the parameter k for k-nearest-neighbor classification
    
     classified_o = np.zeros(test_size) # list of classified/not classified projections for using the original data point and nearest cluster
     classified_agg_o = np.zeros(test_size) # list of classified/not classified projections for using the original data point and nearest (interpolation_number) clusters
     classified_bm = np.zeros(test_size) # list of classified/not classified projections for using the nearest frame, benchmark
     classified_c = np.zeros(test_size) # list of classified/not classified projections for using the Grassmann center method
-   
-    doGrassmannpFCenter = 0 # do or do not do projected Frobenius center of mass for Grassmannian frame
-    doStiefelEuclidCenter = 1 # do or do not do Euclid center of mass for Stiefel frame 
-    doGD = 0 # do or do not do GD for finding projected Frobenius center of mass
    
     cpu_time_start = time.process_time()
     for test_index in range(test_size):
@@ -347,7 +411,7 @@ def LPP_NearestNeighborTest():
         # record the sequence of all interpolation numbers for each test point x
         interpolation_number_seq[test_index] = interpolation_number
         # find the LPP Stiefel projection frames A_k1, ..., A_k{interpolation_number} for the first (interpolation_number) closest clusters to x
-        frames = np.zeros((interpolation_number, kd_data, kd_LPP))
+        frames = np.zeros((interpolation_number, kd_data, d_LPP))
         for i in range(interpolation_number):
             frames[i] = Seq[indexes[i]]
         # find the weights w_1, ..., w_{interpolation_number} for the first (interpolation_number) closest clusters to x
@@ -378,11 +442,6 @@ def LPP_NearestNeighborTest():
         isclassified_bm, class_predict = knn(x_test, y_test, X_train, Y_train, k_nearest_neighbor)
         classified_bm[test_index] = isclassified_bm
         # calculate the center of mass for the (interpolation_number) nearest cluster LPP frames with respect to weights w 
-        threshold_gradnorm = 1e-4
-        threshold_fixedpoint = 1e-4
-        threshold_checkonGrassmann = 1e-10
-        threshold_checkonStiefel = 1e-10
-        threshold_logStiefel = 1e-4
         if doGrassmannpFCenter:
             # do Grassmann center of mass method
             GrassmannOpt = Grassmann_Optimization(w, frames, threshold_gradnorm, threshold_fixedpoint, threshold_checkonGrassmann)
@@ -437,9 +496,9 @@ def GMM_TrainingDataAugmentation(training_data_original_x, training_data_origina
     # using GMM, generate an additional set of training_data_additional_x and predict training_data_additional_y
     training_data_additional_x_, y = gmm.sample(number_samples_additional)
     if learning_model == 'cifar10vgg':
-        model = cifar10vgg()
+        model = model_cifar10vgg
         training_data_additional_x__ = np.matmul(training_data_additional_x_, inv_mat)
-        training_data_additional_x___ = np.reshape(training_data_additional_x__.flatten(), (200, 32, 32, 3))
+        training_data_additional_x___ = np.reshape(training_data_additional_x__.flatten(), (number_samples_additional, 32, 32, 3))
         predicted_x = model.predict(training_data_additional_x___)
         training_data_additional_y = np.argmax(predicted_x, 1)
     elif learning_model == 'GMM':
