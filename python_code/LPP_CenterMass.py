@@ -19,6 +19,8 @@ from sklearn.decomposition import PCA
 import tensorflow as tf
 import time
 from cifar10vgg import cifar10vgg
+from sklearn.mixture import GaussianMixture
+
 
 # set the pre-trained learning models
 model_cifar10vgg = cifar10vgg()
@@ -29,34 +31,44 @@ model_cifar10vgg = cifar10vgg()
 
 # choose to do preliminary PCA dimension reduction to d_PCA for computational feasability only
 do_preliminary_PCA_reduction = 1
-# choose to do a PCA for each cluster to dimension d_second_PCA before do LPP on that cluster
-doSecondPCA_beforeLPP = 0
-# choose to do another PCA to dimension d_second_PCA before do kd-tree decomposition
+# choose to do another PCA to dimension d_SecondPCA_kdtree before do kd-tree decomposition
 doSecondPCA_kdtree = 0
+# choose to do a PCA for each cluster to dimension d_SecondPCA_beforeLPP before do LPP on that cluster
+doSecondPCA_beforeLPP = 0
 
 # select which dataset to work on
 doMNIST = 0
 doCIFAR10 = 1
 # the data preprocessing preliminary PCA reduction projection dimension
-d_PCA = 1024
-# the secondary PCA embedding dimension = d_second_PCA
-# used in 2 cases :
-#   (1) choose to do a second PCA to dimension d_second_PCA before the kd-tree decomposition into clusters
-#   (2) choose to do a second PCA for each cluster to dimension d_second_PCA before do LPP on that cluster
-d_second_PCA = 256
+d_PCA = 512
+# the secondary PCA embedding dimension in case we do a second PCA to dimension d_SecondPCA_beforeLPP before the kd-tree decomposition into clusters
+d_SecondPCA_kdtree = 256
+# the secondary PCA embedding dimension in case we do a second PCA for each cluster to dimension d_SecondPCA_kdtree before we do LPP on that cluster
+d_SecondPCA_beforeLPP = 128
 # the LPP embedding dimension = d_LPP on each given cluster
-d_LPP = 512
+d_LPP = 256
 # train_size = the training data size
-train_size = 150 * (2**8)
+train_size = 150 * (2**4)
 # ht = the partition tree height
-ht = 8
+ht = 4
 # test_size = the test data size
-test_size = 100
+test_size = 1000
 
-# choose to augment the data_train_x_k and data_train_y_k by GMM sampling and pre-trained learning model prediction
-doAugment = 1
-# the number of additional samples, in case we do augment training data
-number_samples_additional = 2000 
+# choose to augment the original training data x and y globally by GMM sampling and pre-trained learning model prediction, use them to build the kd-tree and subspace model
+# in this case, the augmented data points will be used automatically in knn nearest neighbor clssification
+doAugment_Global = 1
+# the number of additional samples for the whole training set, in case we do augment the training set globally
+number_samples_additional_Global = 500 * (2**4)
+# the number of components used in gmm when generating new training data x globally for the whole training set, it is different from label y classes in the training data 
+gmm_components_Global = 512
+# choose to augment the data_train_x_k and data_train_y_k within the kd tree cluster by GMM sampling and pre-trained learning model prediction, use them to build the subspace model
+doAugment_kdtreeCluster = 0
+# choose to use the augmented data developed for each kd tree cluster in doing nearest neighbor classification
+doUseAugmentData_kdtreeCluster = 0
+# the number of additional samples in a kd-tree cluster, in case we do augment training data within that kd-tree cluster
+number_samples_additional_kdtreeCluster = 500
+# the number of components used in gmm when generating new training data x within a kd-tree cluster, it is different from label y classes in the training data 
+gmm_components_kdtreeCluster = 100
 # pick the pre-trained learning model for augmentation
 doCIFAR10vgg = 1
 doGMM = 0
@@ -91,7 +103,7 @@ threshold_logStiefel = 1e-4
 #################################################################################################################################################
 
 
-# load the data set, nwpu-aerial-images, MNIST or CIFAR-10
+# load the data set, MNIST or CIFAR-10
 def load_data(doMNIST, doCIFAR10):
     # load MNIST dataset
     if doMNIST:
@@ -215,17 +227,17 @@ def affinity_supervised(X, Y, between_class_affinity):
 # Set the partition tree depth = ht
 # Tree partition data_train into clusters C_1, ..., C_{2^{ht}} with centers m_1, ..., m_{2^{ht}}
 # Sample a test dataset data_test from the data_original_test set for testing purposes, data_test = (data_test["x"], data_test["y"])
-def LPP_ObtainData(data_original_train, data_original_test, d_PCA, d_LPP, d_second_PCA, train_size, test_size, ht):
+def LPP_ObtainData(data_original_train, data_original_test, d_PCA, d_SecondPCA_kdtree, train_size, test_size, ht):
     # Input
     #   data = the original data set, in the python code we treat it as a dictionary data={"x": [inputs], "y": [labels]}
     #   d_PCA = the data preprocessing PCA projection dimension
-    #   d_second_PCA = the second level PCA embedding dimension
-    #   d_LPP = the LPP embedding dimension 
+    #   d_SecondPCA_kdtree = the second level PCA embedding dimension for building the kd-tree
     #   train_size, test_size = the training/testing data set size
     #   ht = the partition tree height
     # Output
     #   data_train, data_test = the training/testing data set , size is traing_size/test_size
     #   leafs = leafs{k}, the cluster indexes in data_train
+    #   inv_mat = the pseudo-inverse map that helps to reconstruct the labels for newly-generated training data x using pre-trained model
     
     # compute the sizes of the original training and testing dataset
     n_data_original_train = len(data_original_train["x"]) 
@@ -246,8 +258,8 @@ def LPP_ObtainData(data_original_train, data_original_test, d_PCA, d_LPP, d_seco
         inv_mat = np.linalg.pinv(np.array([A0[_] for _ in range(d_PCA)]).T)
     else:
         # record the pseudo-inverse map that helps to recover the low-dimensional data to original data dimension
-        kd_data = len(data_original_train["x"][0])
-        inv_mat = np.identity(kd_data, dtype=float)
+        d_data = len(data_original_train["x"][0])
+        inv_mat = np.identity(d_data, dtype=float)
     
     # build the training data set
     indexes = np.random.permutation(n_data_original_train) 
@@ -258,6 +270,20 @@ def LPP_ObtainData(data_original_train, data_original_test, d_PCA, d_LPP, d_seco
     data_train_y = [data_original_train["y"][_] for _ in train_indexes]
     data_train = {"x": data_train_x, "y": data_train_y}
     
+    # choose to augment the obtained training data x and y globally using GMM sampling and label the new x inputs using pre-trained learning model
+    if doAugment_Global:
+        # bulid a Gaussian mixture model on data_train_x
+        # sample from this GMM enough number of training data points, form data_train_x
+        # use the pre-trained learning model, predict labels for the newly generated training set
+        data_train_x_additional, data_train_y_additional = GMM_TrainingDataAugmentation(data_train_x,
+                                                                                        data_train_y, 
+                                                                                        number_samples_additional_Global,
+                                                                                        gmm_components_Global,
+                                                                                        learning_model,
+                                                                                        inv_mat)
+        data_train_x.extend(data_train_x_additional)
+        data_train_y.extend(data_train_y_additional)        
+    
     # build the testing data set
     indexes = np.random.permutation(n_data_original_test) 
     # randomly pick the test sample of size test_size from data_original_test dataset
@@ -267,14 +293,14 @@ def LPP_ObtainData(data_original_train, data_original_test, d_PCA, d_LPP, d_seco
     data_test_y = [data_original_test["y"][_] for _ in test_indexes]
     data_test = {"x": data_test_x, "y": data_test_y}
     
-    # choose to do a second level PCA to dimension d_second_PCA before the kd-tree decomposition
+    # choose to do a second level PCA to dimension d_SecondPCA_kdtree before the kd-tree decomposition
     if doSecondPCA_kdtree:
-        # do another initial PCA on data_train to d_second_PCA
+        # do another initial PCA on data_train to d_SecondPCA_kdtree
         pca = PCA()
         pca.fit(data_train_x)
         A0 = pca.components_
-        # bulid a d_second_PCA dimensional embedding of data_train in x0
-        x0 = np.matmul(data_train_x, np.array([A0[_] for _ in range(d_second_PCA)]).T)
+        # bulid a d_SecondPCA_kdtree dimensional embedding of data_train in x0
+        x0 = np.matmul(data_train_x, np.array([A0[_] for _ in range(d_SecondPCA_kdtree)]).T)
         # from x0, partition into 2^ht leaf nodes, each leaf node can give samples for a local LPP
         indx, leafs, mbrs = buildVisualWordList(x0, ht)
     else:
@@ -286,21 +312,25 @@ def LPP_ObtainData(data_original_train, data_original_test, d_PCA, d_LPP, d_seco
 
 # build LPP Model for each leaf in data_train
 # Assume the tree partition indexes of data_train into clusters C_1, ..., C_{2^{ht}} with centers m_1, ..., m_{2^{ht}} is given in leafs
-# first project each C_i to local PCA with dimension d_second_PCA  
-# then continue to construct the local LPP frames A_1, ..., A_{2^{ht}} in G(kd_data, d_LPP) using supervised affinity
-def LPP_BuildDataModel(data_train, leafs, d_second_PCA, d_LPP, inv_mat):
+# first project each C_i to local PCA with dimension d_SecondPCA_beforeLPP  
+# then continue to construct the local LPP frames A_1, ..., A_{2^{ht}} in G(d_data, d_LPP) using supervised affinity
+def LPP_BuildDataModel(data_train, leafs, d_SecondPCA_beforeLPP, d_LPP, inv_mat, train_size):
     # Input:
     #   data_train = the training data set
     #   leafs = the tree partition indexes of data_train into clusters C_1, ..., C_{2^{ht}}
-    #   d_second_PCA = the second-level PCA embedding dimension
+    #   d_SecondPCA_beforeLPP = the second-level PCA embedding dimension before we do LPP
     #   d_LPP = the LPP embedding dimension 
+    #   inv_mat = the pseudo-inverse map that helps to reconstruct the labels for newly-generated training data x within kd-tree cluster using pre-trained model
+    #   train_size = the size of the original training data set
     # Output:
     #   Seq = the LPP frames corresponding to each cluster in data_train, labeling the correponding Grassmann equivalence class
+    #   data_train = the training data set possibly modified by augmenting each cluster using pre-trained model labeling
+    #   leafs = the indexes of data_train into new possibly augmented clusters C_1, ..., C_{2^{ht}}
 
     # obtain the dimension of each sample in data_train["x"]
-    kd_data = len(data_train["x"][0])
+    d_data = len(data_train["x"][0])
     # initialize the LPP frames A_1,...,A_{2^{ht}}
-    Seq = np.zeros((len(leafs), kd_data, d_LPP))
+    Seq = np.zeros((len(leafs), d_data, d_LPP))
     # build LPP Model for each leaf
     # input: data, indx, leafs
     for k in range(len(leafs)):
@@ -308,24 +338,25 @@ def LPP_BuildDataModel(data_train, leafs, d_second_PCA, d_LPP, inv_mat):
         data_train_x_k = [data_train["x"][_] for _ in leafs[k]]
         data_train_y_k = [data_train["y"][_] for _ in leafs[k]]
         # augment the data_train_x_k and data_train_y_k by GMM sampling and pre-trained learning model prediction
-        if doAugment:
+        if doAugment_kdtreeCluster:
             # bulid a Gaussian mixture model on data_train_x_k
             # sample from this GMM enough number of training data points, form data_train_x_k
             # use the pre-trained learning model, predict labels for the newly generated training set
             data_train_x_k_additional, data_train_y_k_additional = GMM_TrainingDataAugmentation(data_train_x_k, 
                                                                                                 data_train_y_k, 
-                                                                                                number_samples_additional, 
+                                                                                                number_samples_additional_kdtreeCluster,
+                                                                                                gmm_components_kdtreeCluster,
                                                                                                 learning_model,
                                                                                                 inv_mat)
             data_train_x_k.extend(data_train_x_k_additional)
             data_train_y_k.extend(data_train_y_k_additional)
 
         if doSecondPCA_beforeLPP:
-            # do a second-level PCA first, for the k-th cluster, so data_train_x_k dimension is reduced to d_second_PCA
+            # do a second-level PCA first, for the k-th cluster, so data_train_x_k dimension is reduced to d_SecondPCA_beforeLPP
             pca = PCA()
             pca.fit(data_train_x_k)
             PCA_k = pca.components_
-            data_train_x_k = np.matmul(data_train_x_k, np.array([PCA_k[_] for _ in range(d_second_PCA)]).T)
+            data_train_x_k = np.matmul(data_train_x_k, np.array([PCA_k[_] for _ in range(d_SecondPCA_beforeLPP)]).T)
             # then do LPP for the PCA embedded data_train_x_k and reduce the dimension to d_LPP
             # construct the supervise affinity matrix S
             between_class_affinity = 0
@@ -336,7 +367,7 @@ def LPP_BuildDataModel(data_train, leafs, d_second_PCA, d_LPP, inv_mat):
             A_k, LAMBDA = LPP(data_train_x_k, L_k, D_k)
             LPP_k, R = np.linalg.qr(A_k)        
             # obtain the frame Seq(:,:,k)
-            Seq[k] = np.matmul(np.array([PCA_k[_] for _ in range(d_second_PCA)]).T, np.array([LPP_k[_] for _ in range(1, d_LPP+1)]).T)
+            Seq[k] = np.matmul(np.array([PCA_k[_] for _ in range(d_SecondPCA_beforeLPP)]).T, np.array([LPP_k[_] for _ in range(1, d_LPP+1)]).T)
             print("frame ",k+1," size=(", len(Seq[k]),",",len(Seq[k][0]), "), IfStiefel? Residue = ", np.linalg.norm(np.array(np.matmul(Seq[k].T, Seq[k]))-np.array(np.diag(np.ones(d_LPP)))))
         else:
             # do LPP directly to data_train_x_k and reduce the dimension to d_LPP
@@ -351,8 +382,16 @@ def LPP_BuildDataModel(data_train, leafs, d_second_PCA, d_LPP, inv_mat):
             # obtain the frame Seq(:,:,k)
             Seq[k] = np.array([LPP_k[_] for _ in range(1, d_LPP+1)]).T
             print("frame ",k+1," size=(", len(Seq[k]),",",len(Seq[k][0]), "), IfStiefel? Residue = ", np.linalg.norm(np.array(np.matmul(Seq[k].T, Seq[k]))-np.array(np.diag(np.ones(d_LPP)))))
-            
-    return Seq
+
+    # choose to use the augmented data with labels from pre-trained model for the clusters
+    if doUseAugmentData_kdtreeCluster and doAugment_kdtreeCluster:
+        for k in range(len(leafs)):
+            # finalize the training data for the k-th cluster
+            data_train["x"].extend(data_train_x_k_additional)    
+            data_train["y"].extend(data_train_y_k_additional)
+            leafs[k].extend(range(train_size + k * number_samples_additional_kdtreeCluster, train_size + (k+1) * number_samples_additional_kdtreeCluster))
+   
+    return Seq, data_train, leafs
 
 
 # Test the LPP piecewise linear embedding model and the interpolated piecewise linear embedding model
@@ -364,18 +403,18 @@ def LPP_NearestNeighborTest():
     data_original_train, data_original_test = load_data(doMNIST, doCIFAR10)
 
     # obtain the train, test sets in nwpu and the LPP frames Seq(:,:,k) for each cluster with indexes in leafs
-    data_train, leafs, data_test, inv_mat = LPP_ObtainData(data_original_train, data_original_test, d_PCA, d_LPP, d_second_PCA, train_size, test_size, ht)
-    Seq = LPP_BuildDataModel(data_train, leafs, d_second_PCA, d_LPP, inv_mat)
+    data_train, leafs, data_test, inv_mat = LPP_ObtainData(data_original_train, data_original_test, d_PCA, d_SecondPCA_kdtree, train_size, test_size, ht)
+    Seq, data_train, leafs = LPP_BuildDataModel(data_train, leafs, d_SecondPCA_beforeLPP, d_LPP, inv_mat, train_size)
 
     # all these LPP Stiefel frames are on St(n, p)
     n = len(Seq[0])
     p = len(Seq[0][0])
         
-    # data original dimension kd_data
-    kd_data = len(data_train["x"][0])
+    # data original dimension d_data
+    d_data = len(data_train["x"][0])
         
     # find m_1, ..., m_{2^{ht}}, the means of the chosen clusters
-    m = np.zeros((2**ht, kd_data))
+    m = np.zeros((2**ht, d_data))
     for k in range(2**ht):
         m[k] = np.mean([data_train["x"][_] for _ in leafs[k]], axis=0)
 
@@ -387,7 +426,8 @@ def LPP_NearestNeighborTest():
     classified_agg_o = np.zeros(test_size) # list of classified/not classified projections for using the original data point and nearest (interpolation_number) clusters
     classified_bm = np.zeros(test_size) # list of classified/not classified projections for using the nearest frame, benchmark
     classified_c = np.zeros(test_size) # list of classified/not classified projections for using the Grassmann center method
-   
+    classified_model = np.zeros(test_size) # list of classified/not classified projections for using the pre-trained learning model
+    
     cpu_time_start = time.process_time()
     for test_index in range(test_size):
         print("\ntest point", test_index+1, " -----------------------------------------------------------\n")
@@ -411,7 +451,7 @@ def LPP_NearestNeighborTest():
         # record the sequence of all interpolation numbers for each test point x
         interpolation_number_seq[test_index] = interpolation_number
         # find the LPP Stiefel projection frames A_k1, ..., A_k{interpolation_number} for the first (interpolation_number) closest clusters to x
-        frames = np.zeros((interpolation_number, kd_data, d_LPP))
+        frames = np.zeros((interpolation_number, d_data, d_LPP))
         for i in range(interpolation_number):
             frames[i] = Seq[indexes[i]]
         # find the weights w_1, ..., w_{interpolation_number} for the first (interpolation_number) closest clusters to x
@@ -466,8 +506,28 @@ def LPP_NearestNeighborTest():
         Y_train = [data_train["y"][_] for _ in aggregate_cluster]    
         isclassified_c, class_predict = knn(x_test, y_test, X_train, Y_train, k_nearest_neighbor)
         classified_c[test_index] = isclassified_c
+        # classify x using pre-trained learning model
+        x_test = x
+        y_test = y
+        if learning_model == 'cifar10vgg':
+            model = model_cifar10vgg
+            x_test_ = [x_test]
+            x_test__ = np.matmul(x_test_, inv_mat)
+            x_test___ = np.reshape(x_test__.flatten(), (1, 32, 32, 3))
+            predicted_x = model.predict(x_test___)
+            class_predict = np.argmax(predicted_x, 1)[0]
+            isclassified_model = (class_predict == y) + 0
+        else: 
+            print("No Pre-Trained Learning Model Chosen!\n")
+            isclassified_model = 0
+        classified_model[test_index] = isclassified_model
+        
         # output the result
-        print("original dimension classified =", isclassified_o, ", original dimension aggregate classified =", isclassified_agg_o, ", benchmark classified =", isclassified_bm, ", center mass classfied =", isclassified_c)
+        print("original dimension classified =", isclassified_o)
+        print("original dimension aggregate classified =", isclassified_agg_o)
+        print("benchmark classified =", isclassified_bm)
+        print("center mass classfied =", isclassified_c)
+        print("pre-trained model clssified =", isclassified_model)
 
     # summarize the final result
     cpu_time_end = time.process_time()
@@ -476,7 +536,8 @@ def LPP_NearestNeighborTest():
     print("\noriginal dimension classification rate = ", (sum(classified_o)/test_size)*100, "%")
     print("\noriginal dimension aggregate classification rate =", (sum(classified_agg_o)/test_size)*100, "%")
     print("\nbenchmark correct classification rate = ", (sum(classified_bm)/test_size)*100, "%")
-    print("\ncenter mass correct classification rate =", (sum(classified_c)/test_size)*100, "%\n")
+    print("\ncenter mass correct classification rate =", (sum(classified_c)/test_size)*100, "%")
+    print("\npre-trained model classification rate =", (sum(classified_model)/test_size)*100, "%\n")
 
     return None
 
@@ -484,23 +545,24 @@ def LPP_NearestNeighborTest():
 # given a set of training_data_original_x with labels training_data_original_y
 # fit from them a GMM model and sample from this GMM model a given number of additional training samples training_data_additional_x 
 # with training_data_additional_x, using a pre-trained learning_model, label each additional sample and produce corresponding labels training_data_additional_y
-def GMM_TrainingDataAugmentation(training_data_original_x, training_data_original_y, number_samples_additional, learning_model, inv_mat):
-    
-    # obtain the number of different labels in training_data_original_y
-    num_classes = len(set(training_data_original_y))
+def GMM_TrainingDataAugmentation(training_data_original_x, training_data_original_y, number_samples_additional, gmm_components, learning_model, inv_mat):
 
     # fit train_data_original_x using a GMM model
-    from sklearn.mixture import GaussianMixture
-    gmm = GaussianMixture(n_components=num_classes).fit(training_data_original_x)
+    gmm = GaussianMixture(n_components = gmm_components).fit(training_data_original_x)
 
+    # initialize the new labels
+    training_data_additional_y = []
+    
     # using GMM, generate an additional set of training_data_additional_x and predict training_data_additional_y
     training_data_additional_x_, y = gmm.sample(number_samples_additional)
     if learning_model == 'cifar10vgg':
         model = model_cifar10vgg
-        training_data_additional_x__ = np.matmul(training_data_additional_x_, inv_mat)
-        training_data_additional_x___ = np.reshape(training_data_additional_x__.flatten(), (number_samples_additional, 32, 32, 3))
-        predicted_x = model.predict(training_data_additional_x___)
-        training_data_additional_y = np.argmax(predicted_x, 1)
+        for i in range(number_samples_additional):
+            training_data_additional_x__i = np.matmul(training_data_additional_x_[i], inv_mat)
+            training_data_additional_x___i = np.reshape(training_data_additional_x__i.flatten(), (1, 32, 32, 3))
+            predicted_x_i = model.predict(training_data_additional_x___i)
+            training_data_additional_y.append(np.argmax(predicted_x_i, 1)[0])
+            print("Newly generated input data #", i, ", pre-trained model predicted label is ", training_data_additional_y[i])
     elif learning_model == 'GMM':
         training_data_additional_y = (gmm.predict(training_data_additional_x_)).tolist()
     else:
