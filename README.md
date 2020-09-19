@@ -30,4 +30,22 @@ classfication analysis based on Laplacian eigenface and graph Laplacian method, 
 
 <b>(b) folder "python_code"</b>
 
-files with same names and functions as matlab_code
+(7) Stiefel_Optimization.py 
+
+file with same name and function as matlab_code
+
+(8) Grassmann_Optimization.py
+
+file with same name and function as matlab_code
+
+(9) buildVisualWordList.py
+
+file with same name and function as matlab_code
+
+(10) LPP_CenterMass.py
+
+classfication analysis based on Laplacian eigenface and graph Laplacian method, as well as center of mass on Grassmann manifold. Applied to several different datasets: MNIST, cifar10; incorporates GMM sampling of pseudo-data inputs and labeling by pre-trained model
+
+(11) cifar10vgg.py
+
+build a pre-trained vgg model for cifar10, can also train a new cifar10. Pre-trained model paramter data available at https://github.com/geifmany/cifar-vgg
