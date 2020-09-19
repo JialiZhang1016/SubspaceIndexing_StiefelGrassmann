@@ -48,17 +48,17 @@ d_SecondPCA_beforeLPP = 128
 # the LPP embedding dimension = d_LPP on each given cluster
 d_LPP = 256
 # train_size = the training data size
-train_size = 150 * (2**4)
+train_size = 150 * (2**8)
 # ht = the partition tree height
-ht = 4
+ht = 8
 # test_size = the test data size
 test_size = 1000
 
 # choose to augment the original training data x and y globally by GMM sampling and pre-trained learning model prediction, use them to build the kd-tree and subspace model
 # in this case, the augmented data points will be used automatically in knn nearest neighbor clssification
-doAugment_Global = 1
+doAugment_Global = 0
 # the number of additional samples for the whole training set, in case we do augment the training set globally
-number_samples_additional_Global = 500 * (2**4)
+number_samples_additional_Global = 300 * (2**8)
 # the number of components used in gmm when generating new training data x globally for the whole training set, it is different from label y classes in the training data 
 gmm_components_Global = 512
 # choose to augment the data_train_x_k and data_train_y_k within the kd tree cluster by GMM sampling and pre-trained learning model prediction, use them to build the subspace model
@@ -584,8 +584,8 @@ LPP analysis based on Grassmann center of mass calculation
 if __name__ == "__main__":
     
     # do test correctness of the specific functions developed
-    doruntest=0
-    if doruntest:
+    doRunTest=0
+    if doRunTest:
         x = [[1, 2], [3, 4], [5, 6], [7, 8], [9, 10], [11, 12], [13, 14], [15, 16], [17, 18], [19, 20], [21, 22], [23, 24], [25, 26], [27, 28], [29, 30], [31, 32]]
         ht = 2
         indx, leafs, mbrs = buildVisualWordList(x, ht)
@@ -614,13 +614,37 @@ if __name__ == "__main__":
         between_class_affinity = 0
         S = affinity_supervised(X, Y, between_class_affinity)
         print("S=", S)
-    
- 
-    
+        
+
+    # do the test of the classification rate using original full data set and original dimension
+    # can choose the data set to be augmented by the pre-trained model
+    doTestFullData_knn = 1
+    if doTestFullData_knn:
+        # load data
+        data_original_train, data_original_test = load_data(doMNIST, doCIFAR10)
+        # obtain the train, test sets in nwpu and the LPP frames Seq(:,:,k) for each cluster with indexes in leafs
+        data_train, leafs, data_test, inv_mat = LPP_ObtainData(data_original_train, data_original_test, d_PCA, d_SecondPCA_kdtree, train_size, test_size, ht)
+        classified_fulldataset = np.zeros(test_size) # list of classified/not classified projections for using knn in the whole data set in itr original space
+        for test_index in range(test_size):
+            print("\ntest point", test_index+1, " -----------------------------------------------------------\n")
+            x = data_test["x"][test_index]
+            y = data_test["y"][test_index]
+            # do k-nearest-neighbor classification for all training data in the original space
+            x_test = x
+            y_test = y
+            X_train = data_train["x"]
+            Y_train = data_train["y"]
+            isclassified_fulldataset, class_predict = knn(x_test, y_test, X_train, Y_train, k_nearest_neighbor)
+            classified_fulldataset[test_index] = isclassified_fulldataset
+            print("full dataset in original dimension classified =", isclassified_fulldataset)
+        # summarize the final result
+        print("\nfull data set original dimension classification rate = ", (sum(classified_fulldataset)/test_size)*100, "%")
+
+
     # do the LPP analysis on different datasets
-    dorunfile = 1
-    
-    if dorunfile:
+    doLPP_NearestNeighborTest = 0
+    if doLPP_NearestNeighborTest:
         LPP_NearestNeighborTest()
+
 
 
