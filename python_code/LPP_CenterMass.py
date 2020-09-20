@@ -9,6 +9,7 @@ Created on Mon Aug  3 17:32:08 2020
 """
 
 from Stiefel_Optimization import Stiefel_Optimization
+from Grassmann_Optimization import Grassmann_Optimization
 from buildVisualWordList import buildVisualWordList
 from operator import itemgetter
 import numpy as np
@@ -40,19 +41,19 @@ doSecondPCA_beforeLPP = 0
 doMNIST = 0
 doCIFAR10 = 1
 # the data preprocessing preliminary PCA reduction projection dimension
-d_PCA = 512
+d_PCA = 128
 # the secondary PCA embedding dimension in case we do a second PCA to dimension d_SecondPCA_beforeLPP before the kd-tree decomposition into clusters
 d_SecondPCA_kdtree = 256
 # the secondary PCA embedding dimension in case we do a second PCA for each cluster to dimension d_SecondPCA_kdtree before we do LPP on that cluster
 d_SecondPCA_beforeLPP = 128
 # the LPP embedding dimension = d_LPP on each given cluster
-d_LPP = 256
+d_LPP = 64
 # train_size = the training data size
 train_size = 150 * (2**8)
 # ht = the partition tree height
 ht = 8
 # test_size = the test data size
-test_size = 1000
+test_size = 100
 
 # choose to augment the original training data x and y globally by GMM sampling and pre-trained learning model prediction, use them to build the kd-tree and subspace model
 # in this case, the augmented data points will be used automatically in knn nearest neighbor clssification
@@ -97,6 +98,14 @@ threshold_fixedpoint = 1e-4
 threshold_checkonGrassmann = 1e-10
 threshold_checkonStiefel = 1e-10
 threshold_logStiefel = 1e-4
+
+# do test correctness of the specific functions developed
+doRunTest=0
+# do the test of the classification rate using original full data set and original dimension
+# can choose the data set to be augmented by the pre-trained model, either globally or by each cluster 
+doTestFullData_knn = 0
+# do the LPP analysis on different datasets
+doLPP_NearestNeighborTest = 1
 
 #################################################################################################################################################
 ############################################             end of parameter setting                    ############################################
@@ -584,7 +593,6 @@ LPP analysis based on Grassmann center of mass calculation
 if __name__ == "__main__":
     
     # do test correctness of the specific functions developed
-    doRunTest=0
     if doRunTest:
         x = [[1, 2], [3, 4], [5, 6], [7, 8], [9, 10], [11, 12], [13, 14], [15, 16], [17, 18], [19, 20], [21, 22], [23, 24], [25, 26], [27, 28], [29, 30], [31, 32]]
         ht = 2
@@ -617,13 +625,14 @@ if __name__ == "__main__":
         
 
     # do the test of the classification rate using original full data set and original dimension
-    # can choose the data set to be augmented by the pre-trained model
-    doTestFullData_knn = 1
+    # can choose the data set to be augmented by the pre-trained model, either globally or by each cluster 
     if doTestFullData_knn:
         # load data
         data_original_train, data_original_test = load_data(doMNIST, doCIFAR10)
         # obtain the train, test sets in nwpu and the LPP frames Seq(:,:,k) for each cluster with indexes in leafs
         data_train, leafs, data_test, inv_mat = LPP_ObtainData(data_original_train, data_original_test, d_PCA, d_SecondPCA_kdtree, train_size, test_size, ht)
+        if doUseAugmentData_kdtreeCluster:
+            Seq, data_train, leafs = LPP_BuildDataModel(data_train, leafs, d_SecondPCA_beforeLPP, d_LPP, inv_mat, train_size)
         classified_fulldataset = np.zeros(test_size) # list of classified/not classified projections for using knn in the whole data set in itr original space
         for test_index in range(test_size):
             print("\ntest point", test_index+1, " -----------------------------------------------------------\n")
@@ -642,9 +651,6 @@ if __name__ == "__main__":
 
 
     # do the LPP analysis on different datasets
-    doLPP_NearestNeighborTest = 0
     if doLPP_NearestNeighborTest:
         LPP_NearestNeighborTest()
-
-
 
