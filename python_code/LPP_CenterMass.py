@@ -514,37 +514,6 @@ LPP analysis based on Grassmann center of mass calculation
 
 if __name__ == "__main__":
 
-    # do test correctness of the specific functions developed
-    if doRunTest:
-        x = [[1, 2], [3, 4], [5, 6], [7, 8], [9, 10], [11, 12], [13, 14], [15, 16], [17, 18], [19, 20], [21, 22], [23, 24], [25, 26], [27, 28], [29, 30], [31, 32]]
-        ht = 2
-        indx, leafs, mbrs = buildVisualWordList(x, ht)
-        print("leafs=", leafs)
-        print("indx=", indx)
-        print("mbrs=", mbrs)
-        
-        x_test = [0, 0]
-        y_test = 2
-        X_train = [[0, 1], [1, 0], [0, 2], [2, 0], [0, 3], [3, 0]]
-        Y_train = [2, 2, 2, 2, 1, 1]
-        k = 6
-        isclassified = knn(x_test, y_test, X_train, Y_train, k)
-        print("isclassified=", isclassified)
-        
-        S = [[2, 1], [1, 2]]
-        L, D = graph_laplacian(S)
-        print("L=", L, "D=", D)
-        X = np.array([[0, 1], [1, 0]])
-        W, LAMBDA = LPP(X, L, D)
-        print("W=", W)
-        print("LAMBDA=", LAMBDA)
-        
-        X = [[0, 1, 2], [2, 3, 4], [4, 5, 6]]
-        Y = [1, 2, 1]
-        between_class_affinity = 0
-        S = affinity_supervised(X, Y, between_class_affinity)
-        print("S=", S)
-        
     ###############################################################################################################
     ########################### set all parameters needed in the code for easier tuning ###########################
     ###############################################################################################################
@@ -560,19 +529,19 @@ if __name__ == "__main__":
     doMNIST = 0
     doCIFAR10 = 1
     # the data preprocessing preliminary PCA reduction projection dimension
-    d_PCA = 128
+    d_PCA = 256
     # the secondary PCA embedding dimension in case we do a second PCA to dimension d_SecondPCA_beforeLPP before the kd-tree decomposition into clusters
     d_SecondPCA_kdtree = 128
     # the secondary PCA embedding dimension in case we do a second PCA for each cluster to dimension d_SecondPCA_kdtree before we do LPP on that cluster
     d_SecondPCA_beforeLPP = 100
     # the LPP embedding dimension = d_LPP on each given cluster
-    d_LPP = 100
+    d_LPP = 128
     # train_size = the training data size
     train_size = 150 * (2**8)
     # ht = the partition tree height
     ht = 8
     # test_size = the test data size
-    test_size = 100
+    test_size = 1000
 
     # choose to augment the original training data x and y globally by GMM sampling and pre-trained learning model prediction, use them to build the kd-tree and subspace model
     # in this case, the augmented data points will be used automatically in knn nearest neighbor clssification
@@ -582,9 +551,9 @@ if __name__ == "__main__":
     # the number of components used in gmm when generating new training data x globally for the whole training set, it is different from label y classes in the training data 
     gmm_components_Global = 512
     # choose to augment the data_train_x_k and data_train_y_k within the kd tree cluster by GMM sampling and pre-trained learning model prediction, use them to build the subspace model
-    doAugment_kdtreeCluster = 0
+    doAugment_kdtreeCluster = 1
     # choose to use the augmented data developed for each kd tree cluster in doing nearest neighbor classification
-    doUseAugmentData_kdtreeCluster = 0
+    doUseAugmentData_kdtreeCluster = 1
     # the number of additional samples in a kd-tree cluster, in case we do augment training data within that kd-tree cluster
     number_samples_additional_kdtreeCluster = 500
     # the number of components used in gmm when generating new training data x within a kd-tree cluster, it is different from label y classes in the training data 
@@ -630,6 +599,37 @@ if __name__ == "__main__":
     ###########################                 end of parameter setting                ###########################
     ###############################################################################################################
 
+    # do test correctness of the specific functions developed
+    if doRunTest:
+        x = [[1, 2], [3, 4], [5, 6], [7, 8], [9, 10], [11, 12], [13, 14], [15, 16], [17, 18], [19, 20], [21, 22], [23, 24], [25, 26], [27, 28], [29, 30], [31, 32]]
+        ht = 2
+        indx, leafs, mbrs = buildVisualWordList(x, ht)
+        print("leafs=", leafs)
+        print("indx=", indx)
+        print("mbrs=", mbrs)
+        
+        x_test = [0, 0]
+        y_test = 2
+        X_train = [[0, 1], [1, 0], [0, 2], [2, 0], [0, 3], [3, 0]]
+        Y_train = [2, 2, 2, 2, 1, 1]
+        k = 6
+        isclassified = knn(x_test, y_test, X_train, Y_train, k)
+        print("isclassified=", isclassified)
+        
+        S = [[2, 1], [1, 2]]
+        L, D = graph_laplacian(S)
+        print("L=", L, "D=", D)
+        X = np.array([[0, 1], [1, 0]])
+        W, LAMBDA = LPP(X, L, D)
+        print("W=", W)
+        print("LAMBDA=", LAMBDA)
+        
+        X = [[0, 1, 2], [2, 3, 4], [4, 5, 6]]
+        Y = [1, 2, 1]
+        between_class_affinity = 0
+        S = affinity_supervised(X, Y, between_class_affinity)
+        print("S=", S)
+        
     # do the test of the classification rate using original full data set and original dimension
     # can choose the data set to be augmented by the pre-trained model, either globally or by each cluster 
     if doTestFullData_knn:
@@ -654,7 +654,6 @@ if __name__ == "__main__":
             print("full dataset in original dimension classified =", isclassified_fulldataset)
         # summarize the final result
         print("\nfull data set original dimension classification rate = ", (sum(classified_fulldataset)/test_size)*100, "%")
-
 
     # do the LPP analysis on different datasets
     if doLPP_NearestNeighborTest:
