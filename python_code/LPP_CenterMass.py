@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Created on Mon Aug  3 17:32:08 2020
 
@@ -542,6 +540,7 @@ if __name__ == "__main__":
     ht = 8
     # test_size = the test data size
     test_size = 1000
+
 
     # choose to augment the original training data x and y globally by GMM sampling and pre-trained learning model prediction, use them to build the kd-tree and subspace model
     # in this case, the augmented data points will be used automatically in knn nearest neighbor clssification
