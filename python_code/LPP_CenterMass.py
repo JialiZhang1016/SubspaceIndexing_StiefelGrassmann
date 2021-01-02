@@ -26,91 +26,6 @@ from sklearn.mixture import GaussianMixture
 # set the pre-trained learning models
 model_cifar10vgg = cifar10vgg()
 
-#################################################################################################################################################
-############################################ set all parameters needed in the code for easier tuning ############################################
-#################################################################################################################################################
-
-# choose to do preliminary PCA dimension reduction to d_PCA for computational feasability only
-do_preliminary_PCA_reduction = 1
-# choose to do another PCA to dimension d_SecondPCA_kdtree before do kd-tree decomposition
-doSecondPCA_kdtree = 0
-# choose to do a PCA for each cluster to dimension d_SecondPCA_beforeLPP before do LPP on that cluster
-doSecondPCA_beforeLPP = 0
-
-# select which dataset to work on
-doMNIST = 0
-doCIFAR10 = 1
-# the data preprocessing preliminary PCA reduction projection dimension
-d_PCA = 128
-# the secondary PCA embedding dimension in case we do a second PCA to dimension d_SecondPCA_beforeLPP before the kd-tree decomposition into clusters
-d_SecondPCA_kdtree = 256
-# the secondary PCA embedding dimension in case we do a second PCA for each cluster to dimension d_SecondPCA_kdtree before we do LPP on that cluster
-d_SecondPCA_beforeLPP = 128
-# the LPP embedding dimension = d_LPP on each given cluster
-d_LPP = 64
-# train_size = the training data size
-train_size = 150 * (2**8)
-# ht = the partition tree height
-ht = 8
-# test_size = the test data size
-test_size = 100
-
-# choose to augment the original training data x and y globally by GMM sampling and pre-trained learning model prediction, use them to build the kd-tree and subspace model
-# in this case, the augmented data points will be used automatically in knn nearest neighbor clssification
-doAugment_Global = 0
-# the number of additional samples for the whole training set, in case we do augment the training set globally
-number_samples_additional_Global = 300 * (2**8)
-# the number of components used in gmm when generating new training data x globally for the whole training set, it is different from label y classes in the training data 
-gmm_components_Global = 512
-# choose to augment the data_train_x_k and data_train_y_k within the kd tree cluster by GMM sampling and pre-trained learning model prediction, use them to build the subspace model
-doAugment_kdtreeCluster = 0
-# choose to use the augmented data developed for each kd tree cluster in doing nearest neighbor classification
-doUseAugmentData_kdtreeCluster = 0
-# the number of additional samples in a kd-tree cluster, in case we do augment training data within that kd-tree cluster
-number_samples_additional_kdtreeCluster = 500
-# the number of components used in gmm when generating new training data x within a kd-tree cluster, it is different from label y classes in the training data 
-gmm_components_kdtreeCluster = 100
-# pick the pre-trained learning model for augmentation
-doCIFAR10vgg = 1
-doGMM = 0
-if doCIFAR10vgg:
-    learning_model = 'cifar10vgg'  
-elif doGMM:
-    learning_model = 'GMM' 
-else:
-    learning_model = 'NoModel'
-
-# the ratio for determinining the interpolation_number, serve as a tuning parameter
-ratio_threshold = 1.2 
-# the scaling coefficient for calculating the weights w = e^{-K distance^2}
-K = 1e-8 
-# the parameter k for k-nearest-neighbor classification
-k_nearest_neighbor = 1 
-# do or do not do projected Frobenius center of mass for Grassmannian frame    
-doGrassmannpFCenter = 0 
-# do or do not do Euclid center of mass for Stiefel frame     
-doStiefelEuclidCenter = 1 
-# do or do not do GD for finding center of mass     
-doGD = 0 
-# threshold parameters for Stiefel and Grassmann Optimization
-threshold_gradnorm = 1e-4
-threshold_fixedpoint = 1e-4
-threshold_checkonGrassmann = 1e-10
-threshold_checkonStiefel = 1e-10
-threshold_logStiefel = 1e-4
-
-# do test correctness of the specific functions developed
-doRunTest=0
-# do the test of the classification rate using original full data set and original dimension
-# can choose the data set to be augmented by the pre-trained model, either globally or by each cluster 
-doTestFullData_knn = 0
-# do the LPP analysis on different datasets
-doLPP_NearestNeighborTest = 1
-
-#################################################################################################################################################
-############################################             end of parameter setting                    ############################################
-#################################################################################################################################################
-
 
 # load the data set, MNIST or CIFAR-10
 def load_data(doMNIST, doCIFAR10):
@@ -540,15 +455,22 @@ def LPP_NearestNeighborTest():
 
     # summarize the final result
     cpu_time_end = time.process_time()
+    cpu_time = cpu_time_end - cpu_time_start
+    rate_o = (sum(classified_o)/test_size)*100
+    rate_agg_o = (sum(classified_agg_o)/test_size)*100
+    rate_bm = (sum(classified_bm)/test_size)*100
+    rate_c = (sum(classified_c)/test_size)*100
+    rate_model = (sum(classified_model)/test_size)*100
     print("\n******************** CONCLUSION ********************")
     print("\ncpu runtime for testing = ", cpu_time_end - cpu_time_start, " seconds \n")
-    print("\noriginal dimension classification rate = ", (sum(classified_o)/test_size)*100, "%")
-    print("\noriginal dimension aggregate classification rate =", (sum(classified_agg_o)/test_size)*100, "%")
-    print("\nbenchmark correct classification rate = ", (sum(classified_bm)/test_size)*100, "%")
-    print("\ncenter mass correct classification rate =", (sum(classified_c)/test_size)*100, "%")
-    print("\npre-trained model classification rate =", (sum(classified_model)/test_size)*100, "%\n")
+    print("\nClassification rates\n")
+    print("\nOption 1. using the original data point and nearest cluster: ", rate_o, "%")
+    print("\nOption 2. using the original data point and nearest (interpolation_number) clusters:", rate_agg_o, "%")
+    print("\nOption 3. using the nearest cluster LPP frame after LPP projection, benchmark: ", rate_bm, "%")
+    print("\nOption 4. using the Grassmann center obtained from several nearest cluster LPP frames after LPP projection:", rate_c, "%")
+    print("\nOption 5. using the pre-trained learning model and the pseudo-invese of the initial PCA =", rate_model, "%\n")
 
-    return None
+    return cpu_time, rate_o, rate_agg_o, rate_bm, rate_c, rate_model
 
 
 # given a set of training_data_original_x with labels training_data_original_y
@@ -591,7 +513,7 @@ LPP analysis based on Grassmann center of mass calculation
 """
 
 if __name__ == "__main__":
-    
+
     # do test correctness of the specific functions developed
     if doRunTest:
         x = [[1, 2], [3, 4], [5, 6], [7, 8], [9, 10], [11, 12], [13, 14], [15, 16], [17, 18], [19, 20], [21, 22], [23, 24], [25, 26], [27, 28], [29, 30], [31, 32]]
@@ -623,6 +545,90 @@ if __name__ == "__main__":
         S = affinity_supervised(X, Y, between_class_affinity)
         print("S=", S)
         
+    ###############################################################################################################
+    ########################### set all parameters needed in the code for easier tuning ###########################
+    ###############################################################################################################
+
+    # choose to do preliminary PCA dimension reduction to d_PCA for computational feasability only
+    do_preliminary_PCA_reduction = 1
+    # choose to do another PCA to dimension d_SecondPCA_kdtree before do kd-tree decomposition
+    doSecondPCA_kdtree = 0
+    # choose to do a PCA for each cluster to dimension d_SecondPCA_beforeLPP before do LPP on that cluster
+    doSecondPCA_beforeLPP = 0
+
+    # select which dataset to work on
+    doMNIST = 0
+    doCIFAR10 = 1
+    # the data preprocessing preliminary PCA reduction projection dimension
+    d_PCA = 128
+    # the secondary PCA embedding dimension in case we do a second PCA to dimension d_SecondPCA_beforeLPP before the kd-tree decomposition into clusters
+    d_SecondPCA_kdtree = 128
+    # the secondary PCA embedding dimension in case we do a second PCA for each cluster to dimension d_SecondPCA_kdtree before we do LPP on that cluster
+    d_SecondPCA_beforeLPP = 100
+    # the LPP embedding dimension = d_LPP on each given cluster
+    d_LPP = 100
+    # train_size = the training data size
+    train_size = 150 * (2**8)
+    # ht = the partition tree height
+    ht = 8
+    # test_size = the test data size
+    test_size = 100
+
+    # choose to augment the original training data x and y globally by GMM sampling and pre-trained learning model prediction, use them to build the kd-tree and subspace model
+    # in this case, the augmented data points will be used automatically in knn nearest neighbor clssification
+    doAugment_Global = 0
+    # the number of additional samples for the whole training set, in case we do augment the training set globally
+    number_samples_additional_Global = 300 * (2**8)
+    # the number of components used in gmm when generating new training data x globally for the whole training set, it is different from label y classes in the training data 
+    gmm_components_Global = 512
+    # choose to augment the data_train_x_k and data_train_y_k within the kd tree cluster by GMM sampling and pre-trained learning model prediction, use them to build the subspace model
+    doAugment_kdtreeCluster = 0
+    # choose to use the augmented data developed for each kd tree cluster in doing nearest neighbor classification
+    doUseAugmentData_kdtreeCluster = 0
+    # the number of additional samples in a kd-tree cluster, in case we do augment training data within that kd-tree cluster
+    number_samples_additional_kdtreeCluster = 500
+    # the number of components used in gmm when generating new training data x within a kd-tree cluster, it is different from label y classes in the training data 
+    gmm_components_kdtreeCluster = 100
+    # pick the pre-trained learning model for augmentation
+    doCIFAR10vgg = 1
+    doGMM = 0
+    if doCIFAR10vgg:
+        learning_model = 'cifar10vgg'  
+    elif doGMM:
+        learning_model = 'GMM' 
+    else:
+        learning_model = 'NoModel'
+
+    # the ratio for determinining the interpolation_number, serve as a tuning parameter
+    ratio_threshold = 1.2 
+    # the scaling coefficient for calculating the weights w = e^{-K distance^2}
+    K = 1e-8 
+    # the parameter k for k-nearest-neighbor classification
+    k_nearest_neighbor = 1 
+    # do or do not do projected Frobenius center of mass for Grassmannian frame    
+    doGrassmannpFCenter = 0 
+    # do or do not do Euclid center of mass for Stiefel frame     
+    doStiefelEuclidCenter = 1 
+    # do or do not do GD for finding center of mass     
+    doGD = 0 
+    # threshold parameters for Stiefel and Grassmann Optimization
+    threshold_gradnorm = 1e-4
+    threshold_fixedpoint = 1e-4
+    threshold_checkonGrassmann = 1e-10
+    threshold_checkonStiefel = 1e-10
+    threshold_logStiefel = 1e-4
+
+    # do test correctness of the specific functions developed
+    doRunTest=0
+    # do the test of the classification rate using original full data set and original dimension
+    # can choose the data set to be augmented by the pre-trained model, either globally or by each cluster 
+    doTestFullData_knn = 0
+    # do the LPP analysis on different datasets
+    doLPP_NearestNeighborTest = 1
+
+    ###############################################################################################################
+    ###########################                 end of parameter setting                ###########################
+    ###############################################################################################################
 
     # do the test of the classification rate using original full data set and original dimension
     # can choose the data set to be augmented by the pre-trained model, either globally or by each cluster 
@@ -652,5 +658,5 @@ if __name__ == "__main__":
 
     # do the LPP analysis on different datasets
     if doLPP_NearestNeighborTest:
-        LPP_NearestNeighborTest()
+        cpu_time, rate_o, rate_agg_o, rate_bm, rate_c, rate_model = LPP_NearestNeighborTest()
 
