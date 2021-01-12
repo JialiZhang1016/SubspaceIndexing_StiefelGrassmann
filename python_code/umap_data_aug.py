@@ -3,7 +3,7 @@
 """
 Created on Sat Jan  9 15:12:57 2021
 
-@author: kbiren
+@author: Birendra Kathariya (UMKC) and Wenqing Hu (Missouri S&T)
 """
 
 import numpy as np
@@ -27,8 +27,8 @@ from scipy.spatial import Delaunay
 import umap
 import umap.plot
 
-#------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------
 def sample_points(vertices, n_samples=500):
     '''
     Parameters
@@ -44,6 +44,7 @@ def sample_points(vertices, n_samples=500):
         Its an array of size (n_samples x m) which is data that are generated.
         
     '''
+    # Create Delauney Triangle mesh (2-simplex) surface from the mean-data
     tri = Delaunay(vertices)
     faces = tri.simplices
     vec_cross = np.cross(vertices[faces[:, 0], :] - vertices[faces[:, 2], :],
@@ -51,6 +52,7 @@ def sample_points(vertices, n_samples=500):
     face_areas = np.sqrt(vec_cross ** 2)
     face_areas = face_areas / np.sum(face_areas)
     
+    # Sample points in the triangle mesh surface proportional to their area
     n_samples_per_face = np.ceil(n_samples * face_areas).astype(int)
     floor_num = np.sum(n_samples_per_face) - n_samples
     if floor_num > 0:
@@ -71,83 +73,115 @@ def sample_points(vertices, n_samples=500):
     A = vertices[faces[sample_face_idx, 0], :]
     B = vertices[faces[sample_face_idx, 1], :]
     C = vertices[faces[sample_face_idx, 2], :]
+
     # barycentric coordinate for 2-simplex surface sampling
+    # Used barycentric coordinate surface sampling approach
+    # Total points sampled from all the triangle-meshes are equal to the target point count to be augmented
+
     P = (1 - np.sqrt(r[:,0:1])) * A + np.sqrt(r[:,0:1]) * (1 - r[:,1:]) * B + np.sqrt(r[:,0:1]) * r[:,1:] * C
+    
     return P
+
+
+# Augmentation by UMAP and Linear Interpolation via Simplicial Approximation
+
+def UMAP_Augmentation(data, labels, number_components, number_samples):
+
+    # Apply UMAP to reduce data dimension (n x m => n x d, d << m)
+    mapper = umap.UMAP(random_state=42, n_components=number_components, n_neighbors=200, min_dist=0.1).fit(data)
+    embedding = mapper.transform(data)
+    umap.plot.points(mapper, labels=labels)
+
+    # Cluster this dimension-reduced data based on their label
+    u_labels = np.unique(labels)
+    cluster_mean = np.zeros((len(u_labels), number_components))
+
+    # Compute mean of the clusters (c x d, c is no. of classes )
+    for l in u_labels:
+        cluster_mean[l, :] = np.mean(embedding[labels==l], axis=0)
+
+    # Create Delauney Triangle mesh (2-simplex) surface from the mean-data
+    # Sample points in the triangle mesh surface proportional to their area
+    # Used barycentric coordinate surface sampling approach
+    # Total points sampled from all the triangle-meshes are equal to the target point count to be augmented
+    aug_points = sample_points(cluster_mean, number_samples)
+
+    # Apply inverse UMAP to reconstruct the data to their original dimension
+    inv_transformed_points = mapper.inverse_transform(aug_points)
+    
+    return inv_transformed_points
+ 
+
+
+# load the data set, MNIST or CIFAR-10
+def load_data(doMNIST, doCIFAR10):
+    # load MNIST dataset
+    if doMNIST:
+        # load the MNIST dataset
+        # structure: 
+        #    x_train: list (60000, 28 , 28) dtype=unit8
+        #    x_test: list (10000, 28 , 28) dtype=unit8
+        #    y_train: list (60000, 1) dtype=unit8
+        #    y_test: list (10000, 1) dtype=unit8
+        mnist = tf.keras.datasets.mnist
+        (x_train, y_train), (x_test, y_test) = mnist.load_data()
+        # preprocess the dataset to fit the format we use
+        data_original_train = {"x": [], "y": []}
+        data_original_test = {"x": [], "y": []}
+        # first turn the matrices of x_train and x_test to 28 x 28 = 784 dimensional vectors
+        for i in range(60000):
+            data_original_train["x"].append(np.reshape(x_train[i], 784))
+            data_original_train["y"].append(y_train[i])
+        for i in range(10000):
+            data_original_test["x"].append(np.reshape(x_test[i], 784))
+            data_original_test["y"].append(y_test[i])
+    # load CIFAR10 dataset
+    if doCIFAR10:
+        # load the CIFAR-10 dataset
+        # structure: 
+        # structure: 
+        #    x_train: list (50000, 32 , 32, 3) dtype=unit8
+        #    x_test: list (10000, 32 , 32, 3) dtype=unit8
+        #    y_train: list (50000, 1) dtype=unit8
+        #    y_test: list (10000, 1) dtype=unit8
+        cifar10 = tf.keras.datasets.cifar10
+        (x_train, y_train), (x_test, y_test) = cifar10.load_data()
+        # preprocess the dataset to fit the format we use
+        data_original_train = {"x": [], "y": []}
+        data_original_test = {"x": [], "y": []}
+        # first turn the matrices of x_train and x_test to 32 x 32 x 3 = 3072 dimensional vectors
+        for i in range(50000):
+            data_original_train["x"].append(np.reshape(x_train[i], 3072))
+            data_original_train["y"].append(y_train[i][0])
+        for i in range(10000):
+            data_original_test["x"].append(np.reshape(x_test[i], 3072))
+            data_original_test["y"].append(y_test[i][0])
+            
+    return data_original_train, data_original_test
     
 
 if __name__ == "__main__":
-       
-    #==============================================================================
-    #                                 cifa10
-    #==============================================================================
-    cifar10 = tf.keras.datasets.cifar10
-    (x_train, y_train), (x_test, y_test) = cifar10.load_data()
-
-    #------------------------------------------------------------------------------
-    n_samples = 2048    # no. of samples used for training UMAP
-    n_components = 2     # reduced dimension
-
-    data = x_train[:n_samples].reshape(-1, 32*32*3)
-    labels = y_train[:n_samples].flatten()
-
-    mapper = umap.UMAP(random_state=42, n_components=n_components, n_neighbors=200, min_dist=0.1).fit(data)
-    embedding = mapper.transform(data)
-    umap.plot.points(mapper, labels=labels)
-
-    #------------------------------------------------------------------------------
-
-    u_labels = np.unique(labels)
-    cluster_mean = np.zeros((len(u_labels), n_components))
-    for l in u_labels:
-        cluster_mean[l, :] = np.mean(embedding[labels==l], axis=0)
-
-    aug_points = sample_points(cluster_mean, n_samples=500)
-
-    inv_transformed_points = mapper.inverse_transform(aug_points)
-    rec_image = inv_transformed_points.reshape(-1, 32, 32, 3).astype(np.uint8)
-
-    #------------------------------------------------------------------------------
-    fig = plt.figure(figsize=(12,6))
-    grid = ImageGrid(fig, 111,  # similar to subplot(111)
-                     nrows_ncols=(2, 5),  # creates 2x2 grid of axes
-                     axes_pad=0.1,  # pad between axes in inch.
-                    )
-
-    for ax, im in zip(grid, rec_image):
-        ax.imshow(im)
-    plt.show()
-
-    #==============================================================================
-    #                                 mnist
-    #==============================================================================
-    x_train, y_train = sklearn.datasets.fetch_openml('mnist_784', version=1, return_X_y=True)
-
-    #------------------------------------------------------------------------------
-    n_samples = 2048   # no. of sample sused for training UMAP
-    n_components = 2   # reduced dimension
-
-    data = np.array(x_train)[:n_samples]
-    labels = y_train[:n_samples]
-    labels = np.array([int(l) for l in labels])
-
-    mapper = umap.UMAP(random_state=42, n_components=n_components, n_neighbors=15, min_dist=0.1).fit(data)
-    embedding = mapper.transform(data)
-    umap.plot.points(mapper, labels=labels)
-
-    #------------------------------------------------------------------------------
-
-    u_labels = np.unique(labels)
-    cluster_mean = np.zeros((len(u_labels), n_components))
-    for l in u_labels:
-        cluster_mean[l, :] = np.mean(embedding[labels==l], axis=0)
     
-    aug_points = sample_points(cluster_mean, n_samples=500)
+    doMNIST = 0
+    doCIFAR10 = 1
+    number_samples = 500
+    number_components = 2
 
-    inv_transformed_points = mapper.inverse_transform(aug_points)
-    rec_image = inv_transformed_points.reshape(-1, 28, 28).astype(np.uint8)
+    data_train, data_test = load_data(doMNIST, doCIFAR10)
 
+    data = np.array(data_train["x"])[:2048]
+    labels = np.array(data_train["y"])[:2048]
+
+    inv_transformed_points = UMAP_Augmentation(data, labels, number_components, number_samples)
+    
     #------------------------------------------------------------------------------
+    if doMNIST:
+        rec_image = inv_transformed_points.reshape(-1, 28, 28).astype(np.uint8)
+    elif doCIFAR10:
+        rec_image = inv_transformed_points.reshape(-1, 32, 32, 3).astype(np.uint8)
+    else:
+        print("No data set chosen!\n")
+
     fig = plt.figure(figsize=(12,6))
     grid = ImageGrid(fig, 111,  # similar to subplot(111)
                      nrows_ncols=(10, 10),  # creates 10x10 grid of axes
