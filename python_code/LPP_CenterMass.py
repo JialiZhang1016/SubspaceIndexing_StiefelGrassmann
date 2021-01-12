@@ -197,12 +197,12 @@ def LPP_ObtainData(data_original_train, data_original_test, d_PCA, d_SecondPCA_k
         # bulid a Gaussian mixture model on data_train_x
         # sample from this GMM enough number of training data points, form data_train_x
         # use the pre-trained learning model, predict labels for the newly generated training set
-        data_train_x_additional, data_train_y_additional = GMM_TrainingDataAugmentation(data_train_x,
-                                                                                        data_train_y, 
-                                                                                        number_samples_additional_Global,
-                                                                                        gmm_components_Global,
-                                                                                        learning_model,
-                                                                                        inv_mat)
+        data_train_x_additional, data_train_y_additional = TrainingDataAugmentation(data_train_x,
+                                                                                    data_train_y, 
+                                                                                    number_samples_additional_Global,
+                                                                                    n_components_Global,
+                                                                                    learning_model,
+                                                                                    inv_mat)
         data_train_x.extend(data_train_x_additional)
         data_train_y.extend(data_train_y_additional)        
     
@@ -264,12 +264,12 @@ def LPP_BuildDataModel(data_train, leafs, d_SecondPCA_beforeLPP, d_LPP, inv_mat,
             # bulid a Gaussian mixture model on data_train_x_k
             # sample from this GMM enough number of training data points, form data_train_x_k
             # use the pre-trained learning model, predict labels for the newly generated training set
-            data_train_x_k_additional, data_train_y_k_additional = GMM_TrainingDataAugmentation(data_train_x_k, 
-                                                                                                data_train_y_k, 
-                                                                                                number_samples_additional_kdtreeCluster,
-                                                                                                gmm_components_kdtreeCluster,
-                                                                                                learning_model,
-                                                                                                inv_mat)
+            data_train_x_k_additional, data_train_y_k_additional = TrainingDataAugmentation(data_train_x_k, 
+                                                                                            data_train_y_k, 
+                                                                                            number_samples_additional_kdtreeCluster,
+                                                                                            number_components_kdtreeCluster,
+                                                                                            learning_model,
+                                                                                            inv_mat)
             data_train_x_k.extend(data_train_x_k_additional)
             data_train_y_k.extend(data_train_y_k_additional)
 
@@ -472,18 +472,28 @@ def LPP_NearestNeighborTest():
 
 
 # given a set of training_data_original_x with labels training_data_original_y
-# fit from them a GMM model and sample from this GMM model a given number of additional training samples training_data_additional_x 
+# generate a given number of additional training samples training_data_additional_x 
 # with training_data_additional_x, using a pre-trained learning_model, label each additional sample and produce corresponding labels training_data_additional_y
-def GMM_TrainingDataAugmentation(training_data_original_x, training_data_original_y, number_samples_additional, gmm_components, learning_model, inv_mat):
+def TrainingDataAugmentation(training_data_original_x, training_data_original_y, number_samples_additional, number_components, learning_model, inv_mat):
 
-    # fit train_data_original_x using a GMM model
-    gmm = GaussianMixture(n_components = gmm_components).fit(training_data_original_x)
+    if doAugmentViaGMM:
+        # fit train_data_original_x using a GMM model
+        gmm = GaussianMixture(n_components = number_components).fit(training_data_original_x)
+        # using GMM, generate an additional set of training_data_additional_x and predict training_data_additional_y
+        training_data_additional_x_, y = gmm.sample(number_samples_additional)
+    elif doAugmentViaUMAP:
+        # fit train_data_original_x using UMAP
+        gmm = GaussianMixture(n_components = number_components).fit(training_data_original_x)
+        # using GMM, generate an additional set of training_data_additional_x and predict training_data_additional_y
+        training_data_additional_x_, y = gmm.sample(number_samples_additional)
+    else:
+        # do nothing
+        training_data_additional_x_ = training_data_original_x
+        y = training_data_original_y
 
     # initialize the new labels
     training_data_additional_y = []
     
-    # using GMM, generate an additional set of training_data_additional_x and predict training_data_additional_y
-    training_data_additional_x_, y = gmm.sample(number_samples_additional)
     if learning_model == 'cifar10vgg':
         model = model_cifar10vgg
         for i in range(number_samples_additional):
@@ -499,7 +509,7 @@ def GMM_TrainingDataAugmentation(training_data_original_x, training_data_origina
         return None
 
     training_data_additional_x = [np.array(training_data_additional_x_[_]) for _ in range(number_samples_additional)]
-        
+     
     return training_data_additional_x, training_data_additional_y
 
 

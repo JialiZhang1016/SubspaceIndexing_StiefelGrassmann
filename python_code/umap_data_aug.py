@@ -81,42 +81,43 @@ if __name__ == "__main__":
     #==============================================================================
     #                                 cifa10
     #==============================================================================
-    # cifar10 = tf.keras.datasets.cifar10
-    # (x_train, y_train), (x_test, y_test) = cifar10.load_data()
+    cifar10 = tf.keras.datasets.cifar10
+    (x_train, y_train), (x_test, y_test) = cifar10.load_data()
 
-    # #------------------------------------------------------------------------------
-    # n_samples = 2048 n   # no. of sample sused for training UMAP
-    # n_components = 2     #reduced dimension
+    #------------------------------------------------------------------------------
+    n_samples = 2048    # no. of samples used for training UMAP
+    n_components = 2     # reduced dimension
 
-    # data = x_train[:n_samples].reshape(-1, 32*32*3)
-    # labels = y_train[:n_samples].flatten()
+    data = x_train[:n_samples].reshape(-1, 32*32*3)
+    labels = y_train[:n_samples].flatten()
 
-    # mapper = umap.UMAP(random_state=42, n_components=n_components, n_neighbors=200, min_dist=0.1).fit(data)
-    # embedding = mapper.transform(data)
-    # umap.plot.points(mapper, labels=labels)
+    mapper = umap.UMAP(random_state=42, n_components=n_components, n_neighbors=200, min_dist=0.1).fit(data)
+    embedding = mapper.transform(data)
+    umap.plot.points(mapper, labels=labels)
 
-    # #------------------------------------------------------------------------------
+    #------------------------------------------------------------------------------
 
-    # u_labels = np.unique(labels)
-    # cluster_mean = np.zeros((len(u_labels), n_components))
-    # for l in u_labels:
-    #     cluster_mean[l, :] = np.mean(embedding[labels==l], axis=0)
+    u_labels = np.unique(labels)
+    cluster_mean = np.zeros((len(u_labels), n_components))
+    for l in u_labels:
+        cluster_mean[l, :] = np.mean(embedding[labels==l], axis=0)
 
-    # aug_points = sample_points(cluster_mean, n_samples=500)
+    aug_points = sample_points(cluster_mean, n_samples=500)
 
-    # inv_transformed_points = mapper.inverse_transform(aug_points)
-    # rec_image = inv_transformed_points.reshape(-1, 32, 32, 3).astype(np.uint8)
+    inv_transformed_points = mapper.inverse_transform(aug_points)
+    rec_image = inv_transformed_points.reshape(-1, 32, 32, 3).astype(np.uint8)
 
-    # #------------------------------------------------------------------------------
-    # fig = plt.figure(figsize=(12,6))
-    # grid = ImageGrid(fig, 111,  # similar to subplot(111)
-    #                   nrows_ncols=(2, 5),  # creates 2x2 grid of axes
-    #                   axes_pad=0.1,  # pad between axes in inch.
-    #                   )
+    #------------------------------------------------------------------------------
+    fig = plt.figure(figsize=(12,6))
+    grid = ImageGrid(fig, 111,  # similar to subplot(111)
+                     nrows_ncols=(2, 5),  # creates 2x2 grid of axes
+                     axes_pad=0.1,  # pad between axes in inch.
+                    )
 
-    # for ax, im in zip(grid, rec_image):
-    #     ax.imshow(im)
-    
+    for ax, im in zip(grid, rec_image):
+        ax.imshow(im)
+    plt.show()
+
     #==============================================================================
     #                                 mnist
     #==============================================================================
@@ -127,7 +128,7 @@ if __name__ == "__main__":
     n_components = 2   # reduced dimension
 
     data = np.array(x_train)[:n_samples]
-    labels = y_train[:n_samples].to_list().flatten()
+    labels = y_train[:n_samples]
     labels = np.array([int(l) for l in labels])
 
     mapper = umap.UMAP(random_state=42, n_components=n_components, n_neighbors=15, min_dist=0.1).fit(data)
@@ -144,7 +145,7 @@ if __name__ == "__main__":
     aug_points = sample_points(cluster_mean, n_samples=500)
 
     inv_transformed_points = mapper.inverse_transform(aug_points)
-    rec_image = inv_transformed_points.reshape(-1, 28, 28, 1).astype(np.uint8)
+    rec_image = inv_transformed_points.reshape(-1, 28, 28).astype(np.uint8)
 
     #------------------------------------------------------------------------------
     fig = plt.figure(figsize=(12,6))
@@ -152,6 +153,6 @@ if __name__ == "__main__":
                      nrows_ncols=(10, 10),  # creates 10x10 grid of axes
                      axes_pad=0.1,  # pad between axes in inch.
                      )
-
     for ax, im in zip(grid, rec_image):
         ax.imshow(im)
+    plt.show()
