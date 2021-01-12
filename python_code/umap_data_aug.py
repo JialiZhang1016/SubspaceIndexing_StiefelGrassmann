@@ -90,15 +90,16 @@ def UMAP_Augmentation(data, labels, number_components, number_samples):
     # Apply UMAP to reduce data dimension (n x m => n x d, d << m)
     mapper = umap.UMAP(random_state=42, n_components=number_components, n_neighbors=200, min_dist=0.1).fit(data)
     embedding = mapper.transform(data)
-    umap.plot.points(mapper, labels=labels)
+    #umap.plot.points(mapper, labels=labels)
 
     # Cluster this dimension-reduced data based on their label
     u_labels = np.unique(labels)
-    cluster_mean = np.zeros((len(u_labels), number_components))
+    num_labels = len(u_labels)
+    cluster_mean = np.zeros((num_labels, number_components))
 
     # Compute mean of the clusters (c x d, c is no. of classes )
-    for l in u_labels:
-        cluster_mean[l, :] = np.mean(embedding[labels==l], axis=0)
+    for l in range(num_labels):
+        cluster_mean[l, :] = np.mean(embedding[labels==u_labels[l]], axis=0)
 
     # Create Delauney Triangle mesh (2-simplex) surface from the mean-data
     # Sample points in the triangle mesh surface proportional to their area
@@ -112,9 +113,13 @@ def UMAP_Augmentation(data, labels, number_components, number_samples):
     return inv_transformed_points
  
 
+    
 
-# load the data set, MNIST or CIFAR-10
-def load_data(doMNIST, doCIFAR10):
+if __name__ == "__main__":
+    
+    doMNIST = 0
+    doCIFAR10 = 1
+
     # load MNIST dataset
     if doMNIST:
         # load the MNIST dataset
@@ -156,21 +161,12 @@ def load_data(doMNIST, doCIFAR10):
         for i in range(10000):
             data_original_test["x"].append(np.reshape(x_test[i], 3072))
             data_original_test["y"].append(y_test[i][0])
-            
-    return data_original_train, data_original_test
-    
 
-if __name__ == "__main__":
-    
-    doMNIST = 0
-    doCIFAR10 = 1
+    data = np.array(data_original_train["x"])[:2048]
+    labels = np.array(data_original_train["y"])[:2048]
+
     number_samples = 500
     number_components = 2
-
-    data_train, data_test = load_data(doMNIST, doCIFAR10)
-
-    data = np.array(data_train["x"])[:2048]
-    labels = np.array(data_train["y"])[:2048]
 
     inv_transformed_points = UMAP_Augmentation(data, labels, number_components, number_samples)
     

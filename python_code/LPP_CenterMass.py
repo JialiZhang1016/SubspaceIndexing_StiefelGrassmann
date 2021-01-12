@@ -9,6 +9,7 @@ Created on Mon Aug  3 17:32:08 2020
 from Stiefel_Optimization import Stiefel_Optimization
 from Grassmann_Optimization import Grassmann_Optimization
 from buildVisualWordList import buildVisualWordList
+from umap_data_aug import UMAP_Augmentation
 from operator import itemgetter
 import numpy as np
 import pandas as pd
@@ -482,14 +483,12 @@ def TrainingDataAugmentation(training_data_original_x, training_data_original_y,
         # using GMM, generate an additional set of training_data_additional_x and predict training_data_additional_y
         training_data_additional_x_, y = gmm.sample(number_samples_additional)
     elif doAugmentViaUMAP:
-        # fit train_data_original_x using UMAP
-        gmm = GaussianMixture(n_components = number_components).fit(training_data_original_x)
-        # using GMM, generate an additional set of training_data_additional_x and predict training_data_additional_y
-        training_data_additional_x_, y = gmm.sample(number_samples_additional)
+        # augment train_data_original_x using UMAP
+        training_data_additional_x_ = UMAP_Augmentation(training_data_original_x, training_data_original_y, number_components, number_samples_additional)
     else:
         # do nothing
-        training_data_additional_x_ = training_data_original_x
-        y = training_data_original_y
+        print("No Data Augmentation Method chosen!\n")
+        return None
 
     # initialize the new labels
     training_data_additional_y = []
@@ -558,7 +557,7 @@ if __name__ == "__main__":
     # the number of additional samples for the whole training set, in case we do augment the training set globally
     number_samples_additional_Global = 200 * (2**8)
     # the number of components used in gmm when generating new training data x globally for the whole training set, it is different from label y classes in the training data 
-    number_components_Global = 512
+    number_components_Global = 2
     # choose to augment the data_train_x_k and data_train_y_k within the kd tree cluster by GMM sampling and pre-trained learning model prediction, use them to build the subspace model
     doAugment_kdtreeCluster = 0
     # choose to use the augmented data developed for each kd tree cluster in doing nearest neighbor classification
@@ -566,10 +565,10 @@ if __name__ == "__main__":
     # the number of additional samples in a kd-tree cluster, in case we do augment training data within that kd-tree cluster
     number_samples_additional_kdtreeCluster = 500
     # the number of components used in gmm when generating new training data x within a kd-tree cluster, it is different from label y classes in the training data 
-    number_components_kdtreeCluster = 100
+    number_components_kdtreeCluster = 2
     # pick the method of augmentation: GMM, UMAP
-    doAugmentViaGMM = 1
-    doAugmentViaUMAP = 0
+    doAugmentViaGMM = 0
+    doAugmentViaUMAP = 1
     # pick the pre-trained learning model for augmentation
     doCIFAR10vgg = 1
     doGMM = 0
