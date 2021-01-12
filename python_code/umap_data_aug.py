@@ -36,12 +36,12 @@ def sample_points(vertices, n_samples=500):
     vertices : float
         It is a (n x m) array which represents the corner points of a convex-hull.
     n_samples : int, optional
-        No. of samples to generate. The default is 500.
+        Number of samples to generate. The default is 500.
 
     Returns
     -------
     P : float
-        Its an array of size (n_samples x m) which is data that are generated.
+        It is an array of size (n_samples x m) which is data that are generated.
         
     '''
     # Create Delauney Triangle mesh (2-simplex) surface from the mean-data
