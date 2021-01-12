@@ -200,7 +200,7 @@ def LPP_ObtainData(data_original_train, data_original_test, d_PCA, d_SecondPCA_k
         data_train_x_additional, data_train_y_additional = TrainingDataAugmentation(data_train_x,
                                                                                     data_train_y, 
                                                                                     number_samples_additional_Global,
-                                                                                    n_components_Global,
+                                                                                    number_components_Global,
                                                                                     learning_model,
                                                                                     inv_mat)
         data_train_x.extend(data_train_x_additional)
@@ -554,19 +554,22 @@ if __name__ == "__main__":
 
     # choose to augment the original training data x and y globally by GMM sampling and pre-trained learning model prediction, use them to build the kd-tree and subspace model
     # in this case, the augmented data points will be used automatically in knn nearest neighbor clssification
-    doAugment_Global = 0
+    doAugment_Global = 1
     # the number of additional samples for the whole training set, in case we do augment the training set globally
-    number_samples_additional_Global = 300 * (2**8)
+    number_samples_additional_Global = 200 * (2**8)
     # the number of components used in gmm when generating new training data x globally for the whole training set, it is different from label y classes in the training data 
-    gmm_components_Global = 512
+    number_components_Global = 512
     # choose to augment the data_train_x_k and data_train_y_k within the kd tree cluster by GMM sampling and pre-trained learning model prediction, use them to build the subspace model
-    doAugment_kdtreeCluster = 1
+    doAugment_kdtreeCluster = 0
     # choose to use the augmented data developed for each kd tree cluster in doing nearest neighbor classification
     doUseAugmentData_kdtreeCluster = 1
     # the number of additional samples in a kd-tree cluster, in case we do augment training data within that kd-tree cluster
     number_samples_additional_kdtreeCluster = 500
     # the number of components used in gmm when generating new training data x within a kd-tree cluster, it is different from label y classes in the training data 
-    gmm_components_kdtreeCluster = 100
+    number_components_kdtreeCluster = 100
+    # pick the method of augmentation: GMM, UMAP
+    doAugmentViaGMM = 1
+    doAugmentViaUMAP = 0
     # pick the pre-trained learning model for augmentation
     doCIFAR10vgg = 1
     doGMM = 0
