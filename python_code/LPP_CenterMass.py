@@ -469,6 +469,17 @@ def LPP_NearestNeighborTest():
     print("\nOption 4. using the Grassmann center obtained from several nearest cluster LPP frames after LPP projection:", rate_c, "%")
     print("\nOption 5. using the pre-trained learning model and the pseudo-invese of the initial PCA =", rate_model, "%\n")
 
+    file=open('conclusion.txt', 'w')
+    print("\n******************** CONCLUSION ********************", file=file)
+    print("\ncpu runtime for testing = ", cpu_time_end - cpu_time_start, " seconds \n", file=file)
+    print("\nClassification rates\n", file=file)
+    print("\nOption 1. using the original data point and nearest cluster: ", rate_o, "%", file=file)
+    print("\nOption 2. using the original data point and nearest (interpolation_number) clusters:", rate_agg_o, "%", file=file)
+    print("\nOption 3. using the nearest cluster LPP frame after LPP projection, benchmark: ", rate_bm, "%", file=file)
+    print("\nOption 4. using the Grassmann center obtained from several nearest cluster LPP frames after LPP projection:", rate_c, "%", file=file)
+    print("\nOption 5. using the pre-trained learning model and the pseudo-invese of the initial PCA =", rate_model, "%\n", file=file)
+    file.close()
+
     return cpu_time, rate_o, rate_agg_o, rate_bm, rate_c, rate_model
 
 
@@ -484,7 +495,7 @@ def TrainingDataAugmentation(training_data_original_x, training_data_original_y,
         training_data_additional_x_, y = gmm.sample(number_samples_additional)
     elif doAugmentViaUMAP:
         # augment train_data_original_x using UMAP
-        training_data_additional_x_ = UMAP_Augmentation(training_data_original_x, training_data_original_y, number_components, number_samples_additional)
+        training_data_additional_x_ = UMAP_Augmentation(training_data_original_x, training_data_original_y, number_components, number_samples_additional, number_neighbors_UMAP)
     else:
         # do nothing
         print("No Data Augmentation Method Chosen!\n")
@@ -569,6 +580,8 @@ if __name__ == "__main__":
     # pick the method of augmentation: GMM, UMAP
     doAugmentViaGMM = 0
     doAugmentViaUMAP = 1
+    # parameters for UMAP
+    number_neighbors_UMAP = 20
     # pick the pre-trained learning model for augmentation
     doCIFAR10vgg = 1
     doGMM = 0
