@@ -564,13 +564,13 @@ if __name__ == "__main__":
 
     # choose to augment the original training data x and y globally by GMM sampling and pre-trained learning model prediction, use them to build the kd-tree and subspace model
     # in this case, the augmented data points will be used automatically in knn nearest neighbor clssification
-    doAugment_Global = 0
+    doAugment_Global = 1
     # the number of additional samples for the whole training set, in case we do augment the training set globally
     number_samples_additional_Global = 200 * (2**8)
     # the number of components used in gmm when generating new training data x globally for the whole training set, it is different from label y classes in the training data 
     number_components_Global = 2
     # choose to augment the data_train_x_k and data_train_y_k within the kd tree cluster by GMM sampling and pre-trained learning model prediction, use them to build the subspace model
-    doAugment_kdtreeCluster = 1
+    doAugment_kdtreeCluster = 0
     # choose to use the augmented data developed for each kd tree cluster in doing nearest neighbor classification
     doUseAugmentData_kdtreeCluster = 1
     # the number of additional samples in a kd-tree cluster, in case we do augment training data within that kd-tree cluster
@@ -581,7 +581,7 @@ if __name__ == "__main__":
     doAugmentViaGMM = 0
     doAugmentViaUMAP = 1
     # parameters for UMAP
-    number_neighbors_UMAP = 20
+    number_neighbors_UMAP = 200
     # pick the pre-trained learning model for augmentation
     doCIFAR10vgg = 1
     doGMM = 0
