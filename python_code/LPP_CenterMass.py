@@ -20,7 +20,9 @@ import tensorflow as tf
 import time
 from cifar10vgg import cifar10vgg
 from sklearn.mixture import GaussianMixture
-
+from sklearn.svm import SVC
+import sklearn.datasets
+from sklearn.datasets import fetch_olivetti_faces
 
 # set the pre-trained learning models
 model_cifar10vgg = cifar10vgg()
@@ -82,14 +84,12 @@ def load_data(doMNIST, doCIFAR10, doOlivetti):
         data_original_train = {"x": [], "y": []}
         data_original_test = {"x": [], "y": []}
         # extract the training and testing data sets
-        indexes = np.arange(400) 
-        np.random.shuffle(indexes)
         for i in range(350):
-            data_original_train["x"].append(np.reshape(x[indexes[i]], 4096))
-            data_original_train["y"].append(y[indexes[i]])
+            data_original_train["x"].append(np.reshape(x[i], 4096))
+            data_original_train["y"].append(y[i])
         for i in range(50):
-            data_original_test["x"].append(np.reshape(x[indexes[350+i]], 4096))
-            data_original_test["y"].append(y[indexes[350+i]])
+            data_original_test["x"].append(np.reshape(x[350+i], 4096))
+            data_original_test["y"].append(y[350+i])
 
     return data_original_train, data_original_test
 
@@ -344,7 +344,7 @@ def LPP_BuildDataModel(data_train, leafs, d_SecondPCA_beforeLPP, d_LPP, inv_mat,
 def LPP_NearestNeighborTest():
 
     # load data
-    data_original_train, data_original_test = load_data(doMNIST, doCIFAR10)
+    data_original_train, data_original_test = load_data(doMNIST, doCIFAR10, doOlivetti)
 
     # obtain the train, test sets in nwpu and the LPP frames Seq(:,:,k) for each cluster with indexes in leafs
     data_train, leafs, data_test, inv_mat = LPP_ObtainData(data_original_train, data_original_test, d_PCA, d_SecondPCA_kdtree, train_size, test_size, ht)
@@ -461,6 +461,11 @@ def LPP_NearestNeighborTest():
             predicted_x = model.predict(x_test___)
             class_predict = np.argmax(predicted_x, 1)[0]
             isclassified_model = (class_predict == y) + 0
+        elif learning_model == 'SVMOlivetti':
+            svm = SVC(kernel = 'linear', random_state = 0)
+            svm.fit(data_original_train["x"], data_original_train["y"])
+            class_predict = svm.predict(np.array([x_test]))[0]
+            isclassified_model = (class_predict == y) + 0
         else: 
             print("No Pre-Trained Learning Model Chosen!\n")
             isclassified_model = 0
@@ -535,6 +540,13 @@ def TrainingDataAugmentation(training_data_original_x, training_data_original_y,
             print("Newly generated input data #", i, ", pre-trained model predicted label is ", training_data_additional_y[i])
     elif learning_model == 'GMM':
         training_data_additional_y = (gmm.predict(training_data_additional_x_)).tolist()
+    elif learning_model == 'SVMOlivetti': 
+        svm = SVC(kernel = 'linear', random_state = 0)
+        svm.fit(training_data_original_x, training_data_original_y)
+        for i in range(number_samples_additional):
+            predicted_y_i = svm.predict(np.array([training_data_additional_x_[i]]))[0]
+            training_data_additional_y.append(predicted_y_i)
+            print("Newly generated input data #", i, ", pre-trained model predicted label is ", training_data_additional_y[i])
     else:
         print("No Pre-Trained Learning Model Chosen!\n")
         return None
@@ -566,33 +578,32 @@ if __name__ == "__main__":
 
     # select which dataset to work on
     doMNIST = 0
-    doCIFAR10 = 1
-    doOlivetti = 0
+    doCIFAR10 = 0
+    doOlivetti = 1
     # the data preprocessing preliminary PCA reduction projection dimension
-    d_PCA = 512
+    d_PCA = 256
     # the secondary PCA embedding dimension in case we do a second PCA to dimension d_SecondPCA_beforeLPP before the kd-tree decomposition into clusters
     d_SecondPCA_kdtree = 128
     # the secondary PCA embedding dimension in case we do a second PCA for each cluster to dimension d_SecondPCA_kdtree before we do LPP on that cluster
     d_SecondPCA_beforeLPP = 100
     # the LPP embedding dimension = d_LPP on each given cluster
-    d_LPP = 256
+    d_LPP = 128
     # train_size = the training data size
-    train_size = 150 * (2**8)
+    train_size = 350
     # ht = the partition tree height
     ht = 8
     # test_size = the test data size
-    test_size = 1000
-
+    test_size = 50
 
     # choose to augment the original training data x and y globally by GMM sampling and pre-trained learning model prediction, use them to build the kd-tree and subspace model
     # in this case, the augmented data points will be used automatically in knn nearest neighbor clssification
-    doAugment_Global = 0
+    doAugment_Global = 1
     # the number of additional samples for the whole training set, in case we do augment the training set globally
-    number_samples_additional_Global = 160 * (2**8)
+    number_samples_additional_Global = 1000 * (2**8)
     # the number of components used when generating new training data x globally for the whole training set, it is different from label y classes in the training data 
     number_components_Global = 2
     # choose to augment the data_train_x_k and data_train_y_k within the kd tree cluster by augmentation and pre-trained learning model prediction, use them to build the subspace model
-    doAugment_kdtreeCluster = 1
+    doAugment_kdtreeCluster = 0
     # choose to use the augmented data developed for each kd tree cluster in doing nearest neighbor classification
     doUseAugmentData_kdtreeCluster = 1
     # the number of additional samples in a kd-tree cluster, in case we do augment training data within that kd-tree cluster
@@ -600,17 +611,20 @@ if __name__ == "__main__":
     # the number of components used in augmentation when generating new training data x within a kd-tree cluster, it is different from label y classes in the training data 
     number_components_kdtreeCluster = 2
     # pick the method of augmentation: GMM, UMAP
-    doAugmentViaGMM = 1
-    doAugmentViaUMAP = 0
+    doAugmentViaGMM = 0
+    doAugmentViaUMAP = 1
     # parameters for UMAP
     number_neighbors_UMAP = 20
     # pick the pre-trained learning model for augmentation
-    doCIFAR10vgg = 1
+    doCIFAR10vgg = 0
     doGMM = 0
+    doSVMOlivetti = 1
     if doCIFAR10vgg:
         learning_model = 'cifar10vgg'  
     elif doGMM:
         learning_model = 'GMM' 
+    elif doSVMOlivetti:
+        learning_model = 'SVMOlivetti'
     else:
         learning_model = 'NoModel'
 
@@ -619,7 +633,7 @@ if __name__ == "__main__":
     # the scaling coefficient for calculating the weights w = e^{-K distance^2}
     K = 1e-8 
     # the parameter k for k-nearest-neighbor classification
-    k_nearest_neighbor = 1 
+    k_nearest_neighbor = 1
     # do or do not do projected Frobenius center of mass for Grassmannian frame    
     doGrassmannpFCenter = 0 
     # do or do not do Euclid center of mass for Stiefel frame     
@@ -680,7 +694,7 @@ if __name__ == "__main__":
     # can choose the data set to be augmented by the pre-trained model, either globally or by each cluster 
     if doTestFullData_knn:
         # load data
-        data_original_train, data_original_test = load_data(doMNIST, doCIFAR10)
+        data_original_train, data_original_test = load_data(doMNIST, doCIFAR10, doOlivetti)
         # obtain the train, test sets in nwpu and the LPP frames Seq(:,:,k) for each cluster with indexes in leafs
         data_train, leafs, data_test, inv_mat = LPP_ObtainData(data_original_train, data_original_test, d_PCA, d_SecondPCA_kdtree, train_size, test_size, ht)
         if doUseAugmentData_kdtreeCluster:
