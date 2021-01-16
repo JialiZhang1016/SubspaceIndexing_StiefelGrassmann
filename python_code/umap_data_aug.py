@@ -13,6 +13,7 @@ from sklearn.datasets import load_digits
 import sklearn.datasets
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
+from sklearn.datasets import fetch_olivetti_faces
 
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
@@ -116,8 +117,9 @@ def UMAP_Augmentation(data, labels, number_components, number_samples, number_ne
 
 if __name__ == "__main__":
     
-    doMNIST = 1
+    doMNIST = 0
     doCIFAR10 = 0
+    doOlivetti = 1
 
     # load MNIST dataset
     if doMNIST:
@@ -143,7 +145,6 @@ if __name__ == "__main__":
     if doCIFAR10:
         # load the CIFAR-10 dataset
         # structure: 
-        # structure: 
         #    x_train: list (50000, 32 , 32, 3) dtype=unit8
         #    x_test: list (10000, 32 , 32, 3) dtype=unit8
         #    y_train: list (50000, 1) dtype=unit8
@@ -160,9 +161,30 @@ if __name__ == "__main__":
         for i in range(10000):
             data_original_test["x"].append(np.reshape(x_test[i], 3072))
             data_original_test["y"].append(y_test[i][0])
+    if doOlivetti:
+        # load the ATT Olivetti dataset
+        # structure: 
+        #    images: list (400, 4096) dtype=float32
+        #    target: list (400, 0) dtype=float32
+        OlivettiFaceData = sklearn.datasets.fetch_olivetti_faces(random_state=0)
+        x = OlivettiFaceData.images
+        y = OlivettiFaceData.target
+        # preprocess the dataset to fit the format we use
+        data_original_train = {"x": [], "y": []}
+        data_original_test = {"x": [], "y": []}
+        # extract the training and testing data sets
+        indexes = np.arange(400) 
+        np.random.shuffle(indexes)
+        for i in range(350):
+            data_original_train["x"].append(np.reshape(x[indexes[i]], 4096))
+            data_original_train["y"].append(y[indexes[i]])
+        for i in range(50):
+            data_original_test["x"].append(np.reshape(x[indexes[350+i]], 4096))
+            data_original_test["y"].append(y[indexes[350+i]])
 
-    data = np.array(data_original_train["x"])[:150]
-    labels = np.array(data_original_train["y"])[:150]
+
+    data = np.array(data_original_train["x"])[:350]
+    labels = np.array(data_original_train["y"])[:350]
 
     number_samples = 500
     number_components = 2
@@ -175,6 +197,8 @@ if __name__ == "__main__":
         rec_image = inv_transformed_points.reshape(-1, 28, 28).astype(np.uint8)
     elif doCIFAR10:
         rec_image = inv_transformed_points.reshape(-1, 32, 32, 3).astype(np.uint8)
+    elif doOlivetti:
+        rec_image = inv_transformed_points.reshape(-1, 64, 64).astype(np.float32)
     else:
         print("No data set chosen!\n")
 

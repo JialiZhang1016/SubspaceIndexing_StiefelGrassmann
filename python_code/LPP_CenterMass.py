@@ -27,7 +27,7 @@ model_cifar10vgg = cifar10vgg()
 
 
 # load the data set, MNIST or CIFAR-10
-def load_data(doMNIST, doCIFAR10):
+def load_data(doMNIST, doCIFAR10, doOlivetti):
     # load MNIST dataset
     if doMNIST:
         # load the MNIST dataset
@@ -52,7 +52,6 @@ def load_data(doMNIST, doCIFAR10):
     if doCIFAR10:
         # load the CIFAR-10 dataset
         # structure: 
-        # structure: 
         #    x_train: list (50000, 32 , 32, 3) dtype=unit8
         #    x_test: list (10000, 32 , 32, 3) dtype=unit8
         #    y_train: list (50000, 1) dtype=unit8
@@ -69,7 +68,29 @@ def load_data(doMNIST, doCIFAR10):
         for i in range(10000):
             data_original_test["x"].append(np.reshape(x_test[i], 3072))
             data_original_test["y"].append(y_test[i][0])
-            
+    
+    # load the AT&T Olivetti face data set
+    if doOlivetti:
+        # load the AT&T Olivetti dataset
+        # structure: 
+        #    images: list (400, 4096) dtype=float32
+        #    target: list (400, 0) dtype=float32
+        OlivettiFaceData = sklearn.datasets.fetch_olivetti_faces(random_state=0)
+        x = OlivettiFaceData.images
+        y = OlivettiFaceData.target
+        # preprocess the dataset to fit the format we use
+        data_original_train = {"x": [], "y": []}
+        data_original_test = {"x": [], "y": []}
+        # extract the training and testing data sets
+        indexes = np.arange(400) 
+        np.random.shuffle(indexes)
+        for i in range(350):
+            data_original_train["x"].append(np.reshape(x[indexes[i]], 4096))
+            data_original_train["y"].append(y[indexes[i]])
+        for i in range(50):
+            data_original_test["x"].append(np.reshape(x[indexes[350+i]], 4096))
+            data_original_test["y"].append(y[indexes[350+i]])
+
     return data_original_train, data_original_test
 
 
@@ -193,13 +214,14 @@ def LPP_ObtainData(data_original_train, data_original_test, d_PCA, d_SecondPCA_k
     data_train_y = [data_original_train["y"][_] for _ in train_indexes]
     data_train = {"x": data_train_x, "y": data_train_y}
     
-    # choose to augment the obtained training data x and y globally using GMM sampling and label the new x inputs using pre-trained learning model
+    # choose to augment the obtained training data x and y globally and label the new x inputs using pre-trained learning model
     if doAugment_Global:
-        # bulid a Gaussian mixture model on data_train_x
-        # sample from this GMM enough number of training data points, form data_train_x
+        # generate augmented data points from data_train_x
         # use the pre-trained learning model, predict labels for the newly generated training set
-        data_train_x_additional, data_train_y_additional = TrainingDataAugmentation(data_train_x,
-                                                                                    data_train_y, 
+        indexes = np.arange(len(data_train_y))
+        np.random.shuffle(indexes)
+        data_train_x_additional, data_train_y_additional = TrainingDataAugmentation([data_train_x[_] for _ in indexes[:2048]],
+                                                                                    [data_train_y[_] for _ in indexes[:2048]], 
                                                                                     number_samples_additional_Global,
                                                                                     number_components_Global,
                                                                                     learning_model,
@@ -260,10 +282,9 @@ def LPP_BuildDataModel(data_train, leafs, d_SecondPCA_beforeLPP, d_LPP, inv_mat,
         # form the data_train subsample the k-th cluster
         data_train_x_k = [data_train["x"][_] for _ in leafs[k]]
         data_train_y_k = [data_train["y"][_] for _ in leafs[k]]
-        # augment the data_train_x_k and data_train_y_k by GMM sampling and pre-trained learning model prediction
+        # augment the data_train_x_k and pre-trained learning model prediction
         if doAugment_kdtreeCluster:
-            # bulid a Gaussian mixture model on data_train_x_k
-            # sample from this GMM enough number of training data points, form data_train_x_k
+            # generate new data from data_train_x_k via teh given method
             # use the pre-trained learning model, predict labels for the newly generated training set
             data_train_x_k_additional, data_train_y_k_additional = TrainingDataAugmentation(data_train_x_k, 
                                                                                             data_train_y_k, 
@@ -495,7 +516,7 @@ def TrainingDataAugmentation(training_data_original_x, training_data_original_y,
         training_data_additional_x_, y = gmm.sample(number_samples_additional)
     elif doAugmentViaUMAP:
         # augment train_data_original_x using UMAP
-        training_data_additional_x_ = UMAP_Augmentation(training_data_original_x, training_data_original_y, number_components, number_samples_additional, number_neighbors_UMAP)
+        training_data_additional_x_ = UMAP_Augmentation(np.array(training_data_original_x), np.array(training_data_original_y), number_components, number_samples_additional, number_neighbors_UMAP)
     else:
         # do nothing
         print("No Data Augmentation Method Chosen!\n")
@@ -546,14 +567,15 @@ if __name__ == "__main__":
     # select which dataset to work on
     doMNIST = 0
     doCIFAR10 = 1
+    doOlivetti = 0
     # the data preprocessing preliminary PCA reduction projection dimension
-    d_PCA = 256
+    d_PCA = 512
     # the secondary PCA embedding dimension in case we do a second PCA to dimension d_SecondPCA_beforeLPP before the kd-tree decomposition into clusters
     d_SecondPCA_kdtree = 128
     # the secondary PCA embedding dimension in case we do a second PCA for each cluster to dimension d_SecondPCA_kdtree before we do LPP on that cluster
     d_SecondPCA_beforeLPP = 100
     # the LPP embedding dimension = d_LPP on each given cluster
-    d_LPP = 128
+    d_LPP = 256
     # train_size = the training data size
     train_size = 150 * (2**8)
     # ht = the partition tree height
@@ -564,24 +586,24 @@ if __name__ == "__main__":
 
     # choose to augment the original training data x and y globally by GMM sampling and pre-trained learning model prediction, use them to build the kd-tree and subspace model
     # in this case, the augmented data points will be used automatically in knn nearest neighbor clssification
-    doAugment_Global = 1
+    doAugment_Global = 0
     # the number of additional samples for the whole training set, in case we do augment the training set globally
-    number_samples_additional_Global = 200 * (2**8)
-    # the number of components used in gmm when generating new training data x globally for the whole training set, it is different from label y classes in the training data 
+    number_samples_additional_Global = 160 * (2**8)
+    # the number of components used when generating new training data x globally for the whole training set, it is different from label y classes in the training data 
     number_components_Global = 2
-    # choose to augment the data_train_x_k and data_train_y_k within the kd tree cluster by GMM sampling and pre-trained learning model prediction, use them to build the subspace model
-    doAugment_kdtreeCluster = 0
+    # choose to augment the data_train_x_k and data_train_y_k within the kd tree cluster by augmentation and pre-trained learning model prediction, use them to build the subspace model
+    doAugment_kdtreeCluster = 1
     # choose to use the augmented data developed for each kd tree cluster in doing nearest neighbor classification
     doUseAugmentData_kdtreeCluster = 1
     # the number of additional samples in a kd-tree cluster, in case we do augment training data within that kd-tree cluster
     number_samples_additional_kdtreeCluster = 500
-    # the number of components used in gmm when generating new training data x within a kd-tree cluster, it is different from label y classes in the training data 
+    # the number of components used in augmentation when generating new training data x within a kd-tree cluster, it is different from label y classes in the training data 
     number_components_kdtreeCluster = 2
     # pick the method of augmentation: GMM, UMAP
-    doAugmentViaGMM = 0
-    doAugmentViaUMAP = 1
+    doAugmentViaGMM = 1
+    doAugmentViaUMAP = 0
     # parameters for UMAP
-    number_neighbors_UMAP = 200
+    number_neighbors_UMAP = 20
     # pick the pre-trained learning model for augmentation
     doCIFAR10vgg = 1
     doGMM = 0
