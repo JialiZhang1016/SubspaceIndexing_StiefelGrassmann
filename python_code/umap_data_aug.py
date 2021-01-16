@@ -108,8 +108,13 @@ def UMAP_Augmentation(data, labels, number_components, number_samples, number_ne
     augmented_points = sample_points(cluster_mean, number_samples)
 
     # Apply inverse UMAP to reconstruct the data to their original dimension
-    inv_transformed_points = mapper.inverse_transform(augmented_points)
-    
+    print("---------------UMAP Inverse Transform Started!---------------")
+    inv_transformed_points = []
+    for i in range(number_samples):
+        print("UMAP Transformed Point #", i)
+        inv_transformed_points.append(mapper.inverse_transform([augmented_points[i]])[0])
+    inv_transformed_points = np.array(inv_transformed_points)
+
     return inv_transformed_points
  
 
