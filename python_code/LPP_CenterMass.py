@@ -459,18 +459,8 @@ def LPP_NearestNeighborTest():
             predicted_x = model.predict(x_test___)
             class_predict = np.argmax(predicted_x, 1)[0]
             isclassified_model = (class_predict == y) + 0
-        elif learning_model == 'GMM':
-            number_components = doAugment_Global * number_components_Global + doAugment_kdtreeCluster * number_components_kdtreeCluster
-            gmm = GaussianMixture(n_components = number_components).fit(data_original_train["x"])
-            class_predict = gmm.predict(np.array([x_test]))[0]
-            isclassified_model = (class_predict == y) + 0
-        elif learning_model == 'OlivettiSVM':
-            svm = SVC(kernel = 'linear', random_state = 0)
-            svm.fit(data_original_train["x"], data_original_train["y"])
-            class_predict = svm.predict(np.array([x_test]))[0]
-            isclassified_model = (class_predict == y) + 0
         else: 
-            print("No Pre-Trained Learning Model Chosen!\n")
+            print("Not working with cifar10vgg model.\n")
             isclassified_model = 0
         classified_model[test_index] = isclassified_model
         
@@ -587,13 +577,13 @@ if __name__ == "__main__":
     doCIFAR10 = 0
     doOlivetti = 0
     # the data preprocessing preliminary PCA reduction projection dimension
-    d_PCA = 512
+    d_PCA = 64
     # the secondary PCA embedding dimension in case we do a second PCA to dimension d_SecondPCA_beforeLPP before the kd-tree decomposition into clusters
     d_SecondPCA_kdtree = 128
     # the secondary PCA embedding dimension in case we do a second PCA for each cluster to dimension d_SecondPCA_kdtree before we do LPP on that cluster
     d_SecondPCA_beforeLPP = 100
     # the LPP embedding dimension = d_LPP on each given cluster
-    d_LPP = 256
+    d_LPP = 32
     # train_size = the training data size
     train_size = 150 * (2 ** 8)
     # ht = the partition tree height
@@ -607,15 +597,15 @@ if __name__ == "__main__":
     # the number of additional samples for the whole training set, in case we do augment the training set globally
     number_samples_additional_Global = 500 * (2**8)
     # the number of components used when generating new training data x globally for the whole training set, it is different from label y classes in the training data 
-    number_components_Global = 2
+    number_components_Global = 10
     # choose to augment the data_train_x_k and data_train_y_k within the kd tree cluster by augmentation and pre-trained learning model prediction, use them to build the subspace model
-    doAugment_kdtreeCluster = 1
+    doAugment_kdtreeCluster = 0
     # choose to use the augmented data developed for each kd tree cluster in doing nearest neighbor classification
     doUseAugmentData_kdtreeCluster = 1
     # the number of additional samples in a kd-tree cluster, in case we do augment training data within that kd-tree cluster
     number_samples_additional_kdtreeCluster = 500
     # the number of components used in augmentation when generating new training data x within a kd-tree cluster, it is different from label y classes in the training data 
-    number_components_kdtreeCluster = 2
+    number_components_kdtreeCluster = 10
     # pick the method of augmentation: GMM, UMAP
     doAugmentViaGMM = 1
     doAugmentViaUMAP = 0
