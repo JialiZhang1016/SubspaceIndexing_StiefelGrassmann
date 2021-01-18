@@ -6,6 +6,13 @@ Created on Mon Jan  18 2021
 @author: Wenqing Hu (Missouri S&T)
 """
 
+import numpy as np
+from scipy.linalg import eigh
+from scipy.spatial.distance import cdist
+from operator import itemgetter
+from buildVisualWordList import buildVisualWordList
+import pandas as pd
+
 # k-nearest neighbor classfication
 # given test data x and label y, find in a training set (X, Y) the k-nearest points x1,...,xk to x, and classify x as majority vote on y1,...,yk
 # if the classification is correct, return 1, otherwise return 0
@@ -77,3 +84,41 @@ def affinity_supervised(X, Y, between_class_affinity):
     # obtain the supervised affinity S
     S = S2
     return S
+
+
+
+if __name__ == "__main__":
+
+    # do test correctness of the specific functions developed
+    doRunTest=1
+
+    # do test correctness of the specific functions developed
+    if doRunTest:
+        x = [[1, 2], [3, 4], [5, 6], [7, 8], [9, 10], [11, 12], [13, 14], [15, 16], [17, 18], [19, 20], [21, 22], [23, 24], [25, 26], [27, 28], [29, 30], [31, 32]]
+        ht = 2
+        indx, leafs, mbrs = buildVisualWordList(x, ht)
+        print("leafs=", leafs)
+        print("indx=", indx)
+        print("mbrs=", mbrs)
+        
+        x_test = [0, 0]
+        y_test = 2
+        X_train = [[0, 1], [1, 0], [0, 2], [2, 0], [0, 3], [3, 0]]
+        Y_train = [2, 2, 2, 2, 1, 1]
+        k = 6
+        isclassified = knn(x_test, y_test, X_train, Y_train, k)
+        print("isclassified=", isclassified)
+        
+        S = [[2, 1], [1, 2]]
+        L, D = graph_laplacian(S)
+        print("L=", L, "D=", D)
+        X = np.array([[0, 1], [1, 0]])
+        W, LAMBDA = LPP(X, L, D)
+        print("W=", W)
+        print("LAMBDA=", LAMBDA)
+        
+        X = [[0, 1, 2], [2, 3, 4], [4, 5, 6]]
+        Y = [1, 2, 1]
+        between_class_affinity = 0
+        S = affinity_supervised(X, Y, between_class_affinity)
+        print("S=", S)

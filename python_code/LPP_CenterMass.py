@@ -10,11 +10,8 @@ from Stiefel_Optimization import Stiefel_Optimization
 from Grassmann_Optimization import Grassmann_Optimization
 from buildVisualWordList import buildVisualWordList
 from umap_data_aug import UMAP_Augmentation
-from operator import itemgetter
 import numpy as np
-import pandas as pd
-from scipy.linalg import eigh
-from scipy.spatial.distance import cdist
+from operator import itemgetter
 from sklearn.decomposition import PCA
 import tensorflow as tf
 import time
@@ -538,17 +535,17 @@ if __name__ == "__main__":
 
     # choose to augment the original training data x and y globally by GMM sampling and pre-trained learning model prediction, use them to build the kd-tree and subspace model
     # in this case, the augmented data points will be used automatically in knn nearest neighbor clssification
-    doAugment_Global = 1
+    doAugment_Global = 0
     # the number of additional samples for the whole training set, in case we do augment the training set globally
-    number_samples_additional_Global = 500 * (2**8)
+    number_samples_additional_Global = 400 * (2**8)
     # the number of components used when generating new training data x globally for the whole training set, it is different from label y classes in the training data 
     number_components_Global = 10
     # choose to augment the data_train_x_k and data_train_y_k within the kd tree cluster by augmentation and pre-trained learning model prediction, use them to build the subspace model
-    doAugment_kdtreeCluster = 0
+    doAugment_kdtreeCluster = 1
     # choose to use the augmented data developed for each kd tree cluster in doing nearest neighbor classification
-    doUseAugmentData_kdtreeCluster = 0
+    doUseAugmentData_kdtreeCluster = 1
     # the number of additional samples in a kd-tree cluster, in case we do augment training data within that kd-tree cluster
-    number_samples_additional_kdtreeCluster = 500
+    number_samples_additional_kdtreeCluster = 400
     # the number of components used in augmentation when generating new training data x within a kd-tree cluster, it is different from label y classes in the training data 
     number_components_kdtreeCluster = 2
     # pick the method of augmentation: GMM, UMAP
@@ -594,8 +591,6 @@ if __name__ == "__main__":
     threshold_checkonStiefel = 1e-10
     threshold_logStiefel = 1e-4
 
-    # do test correctness of the specific functions developed
-    doRunTest=0
     # do the test of the classification rate using original full data set and original dimension
     # can choose the data set to be augmented by the pre-trained model, either globally or by each cluster 
     doTestFullData_knn = 0
@@ -606,37 +601,7 @@ if __name__ == "__main__":
     ###########################                 end of parameter setting                ###########################
     ###############################################################################################################
 
-    # do test correctness of the specific functions developed
-    if doRunTest:
-        x = [[1, 2], [3, 4], [5, 6], [7, 8], [9, 10], [11, 12], [13, 14], [15, 16], [17, 18], [19, 20], [21, 22], [23, 24], [25, 26], [27, 28], [29, 30], [31, 32]]
-        ht = 2
-        indx, leafs, mbrs = buildVisualWordList(x, ht)
-        print("leafs=", leafs)
-        print("indx=", indx)
-        print("mbrs=", mbrs)
-        
-        x_test = [0, 0]
-        y_test = 2
-        X_train = [[0, 1], [1, 0], [0, 2], [2, 0], [0, 3], [3, 0]]
-        Y_train = [2, 2, 2, 2, 1, 1]
-        k = 6
-        isclassified = knn(x_test, y_test, X_train, Y_train, k)
-        print("isclassified=", isclassified)
-        
-        S = [[2, 1], [1, 2]]
-        L, D = graph_laplacian(S)
-        print("L=", L, "D=", D)
-        X = np.array([[0, 1], [1, 0]])
-        W, LAMBDA = LPP(X, L, D)
-        print("W=", W)
-        print("LAMBDA=", LAMBDA)
-        
-        X = [[0, 1, 2], [2, 3, 4], [4, 5, 6]]
-        Y = [1, 2, 1]
-        between_class_affinity = 0
-        S = affinity_supervised(X, Y, between_class_affinity)
-        print("S=", S)
-        
+
     # do the test of the classification rate using original full data set and original dimension
     # can choose the data set to be augmented by the pre-trained model, either globally or by each cluster 
     if doTestFullData_knn:
