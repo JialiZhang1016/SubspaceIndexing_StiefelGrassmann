@@ -46,6 +46,14 @@ file with same name and function as matlab_code
 
 classfication analysis based on Laplacian eigenface and graph Laplacian method, as well as center of mass on Grassmann manifold. Applied to several different datasets: MNIST, cifar10; incorporates GMM sampling of pseudo-data inputs and labeling by pre-trained model
 
-(b-5) cifar10vgg.py
+(b-5) LPP_Auxiliary.py
+
+Functions to perform the Laplacian eigenface and graph Laplacian method. Include: k-nearest neighbor, graph laplacian, supervised affinity, LPP generalized eigenvalue problem
+
+(b-6) cifar10vgg.py
 
 build a pre-trained vgg model for cifar10, can also train a new cifar10. Pre-trained model paramter data available at https://github.com/geifmany/cifar-vgg
+
+(b-7) umap_data_aug.py
+
+generate new pseudo data points based on current data set using the UMAP and 2-simplices
