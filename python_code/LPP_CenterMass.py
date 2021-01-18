@@ -23,6 +23,12 @@ from sklearn.mixture import GaussianMixture
 from sklearn.svm import SVC
 import sklearn.datasets
 from sklearn.datasets import fetch_olivetti_faces
+from tensorflow.keras.models import load_model
+from tensorflow.keras.utils import to_categorical
+
+# set the pre-trained learning models for labelling possibly augmented data points
+model_cifar10vgg = cifar10vgg()
+model_MNISTLeNetv2 = load_model('D:\\Temporary Files\\SubspaceIndexing_StiefelGrassmann-master\\python_code\\MNISTLeNetv2.h5')
 
 # load the data set, MNIST or CIFAR-10
 def load_data(doMNIST, doCIFAR10, doOlivetti):
@@ -466,7 +472,7 @@ def LPP_NearestNeighborTest():
         print("original dimension aggregate classified =", isclassified_agg_o)
         print("benchmark classified =", isclassified_bm)
         print("center mass classfied =", isclassified_c)
-        print("cifar10vgg pre-trained model clssified =", isclassified_model)
+        print("pre-trained model clssified =", isclassified_model)
 
     # summarize the final result
     cpu_time_end = time.process_time()
@@ -483,7 +489,7 @@ def LPP_NearestNeighborTest():
     print("\nOption 2. using the original data point and nearest (interpolation_number) clusters:", rate_agg_o, "%")
     print("\nOption 3. using the nearest cluster LPP frame after LPP projection, benchmark: ", rate_bm, "%")
     print("\nOption 4. using the Grassmann center obtained from several nearest cluster LPP frames after LPP projection:", rate_c, "%")
-    print("\nOption 5. using the cifar10vgg pre-trained learning model and the pseudo-invese of the initial PCA =", rate_model, "%\n")
+    print("\nOption 5. using the pre-trained learning model and the pseudo-invese of the initial PCA =", rate_model, "%\n")
 
     file=open('conclusion.txt', 'w')
     print("\n******************** CONCLUSION ********************", file=file)
@@ -493,7 +499,7 @@ def LPP_NearestNeighborTest():
     print("\nOption 2. using the original data point and nearest (interpolation_number) clusters:", rate_agg_o, "%", file=file)
     print("\nOption 3. using the nearest cluster LPP frame after LPP projection, benchmark: ", rate_bm, "%", file=file)
     print("\nOption 4. using the Grassmann center obtained from several nearest cluster LPP frames after LPP projection:", rate_c, "%", file=file)
-    print("\nOption 5. using the cifar10vgg pre-trained learning model and the pseudo-invese of the initial PCA =", rate_model, "%\n", file=file)
+    print("\nOption 5. using the pre-trained learning model and the pseudo-invese of the initial PCA =", rate_model, "%\n", file=file)
     file.close()
 
     return cpu_time, rate_o, rate_agg_o, rate_bm, rate_c, rate_model
@@ -546,6 +552,15 @@ def TrainingDataAugmentation(training_data_original_x, training_data_original_y,
             isclassified, predicted_y_i = knn(training_data_additional_x_[i], '', training_data_original_x, training_data_original_y, 1) 
             training_data_additional_y.append(predicted_y_i)
             print("knn: Newly generated input data #", i, ", pre-trained model predicted label is ", training_data_additional_y[i])
+    elif learning_model == 'MNISTLeNetv2':
+        model = model_MNISTLeNetv2
+        for i in range(number_samples_additional):
+            training_data_additional_x__i = np.matmul(training_data_additional_x_[i], inv_mat)
+            training_data_additional_x___i = np.reshape(training_data_additional_x__i.flatten(), (1, 64, 64))
+            training_data_additional_x____i = np.pad(training_data_additional_x___i[:,:,:, np.newaxis], ((0,0),(2,2),(2,2),(0,0)), 'constant')
+            predicted_x_i = model.predict(training_data_additional_x____i)
+            training_data_additional_y.append(np.argmax(predicted_x_i, 1)[0])
+            print("MNISTLeNetv2: Newly generated input data #", i, ", pre-trained model predicted label is ", training_data_additional_y[i])
     else:
         print("No Pre-Trained Learning Model Chosen!\n")
         return None
@@ -616,11 +631,14 @@ if __name__ == "__main__":
     number_neighbors_UMAP = 20
     # pick the pre-trained learning model for labelling the augmented points
     doCIFAR10vgg = 0
+    doMNISTLeNetv2 = 1
     doGMM = 0
     doSVM = 0
-    doknn = 1
+    doknn = 0
     if doCIFAR10vgg:
-        learning_model = 'cifar10vgg'  
+        learning_model = 'cifar10vgg'
+    if doMNISTLeNetv2:
+        learning_model = 'MNISTLeNetv2'  
     elif doGMM:
         learning_model = 'GMM' 
     elif doSVM:
