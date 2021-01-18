@@ -24,9 +24,6 @@ from sklearn.svm import SVC
 import sklearn.datasets
 from sklearn.datasets import fetch_olivetti_faces
 
-# set the pre-trained learning models
-model_cifar10vgg = cifar10vgg()
-
 # load the data set, MNIST or CIFAR-10
 def load_data(doMNIST, doCIFAR10, doOlivetti):
     # load MNIST dataset
@@ -469,7 +466,7 @@ def LPP_NearestNeighborTest():
         print("original dimension aggregate classified =", isclassified_agg_o)
         print("benchmark classified =", isclassified_bm)
         print("center mass classfied =", isclassified_c)
-        print("pre-trained model clssified =", isclassified_model)
+        print("cifar10vgg pre-trained model clssified =", isclassified_model)
 
     # summarize the final result
     cpu_time_end = time.process_time()
@@ -486,7 +483,7 @@ def LPP_NearestNeighborTest():
     print("\nOption 2. using the original data point and nearest (interpolation_number) clusters:", rate_agg_o, "%")
     print("\nOption 3. using the nearest cluster LPP frame after LPP projection, benchmark: ", rate_bm, "%")
     print("\nOption 4. using the Grassmann center obtained from several nearest cluster LPP frames after LPP projection:", rate_c, "%")
-    print("\nOption 5. using the pre-trained learning model and the pseudo-invese of the initial PCA =", rate_model, "%\n")
+    print("\nOption 5. using the cifar10vgg pre-trained learning model and the pseudo-invese of the initial PCA =", rate_model, "%\n")
 
     file=open('conclusion.txt', 'w')
     print("\n******************** CONCLUSION ********************", file=file)
@@ -496,7 +493,7 @@ def LPP_NearestNeighborTest():
     print("\nOption 2. using the original data point and nearest (interpolation_number) clusters:", rate_agg_o, "%", file=file)
     print("\nOption 3. using the nearest cluster LPP frame after LPP projection, benchmark: ", rate_bm, "%", file=file)
     print("\nOption 4. using the Grassmann center obtained from several nearest cluster LPP frames after LPP projection:", rate_c, "%", file=file)
-    print("\nOption 5. using the pre-trained learning model and the pseudo-invese of the initial PCA =", rate_model, "%\n", file=file)
+    print("\nOption 5. using the cifar10vgg pre-trained learning model and the pseudo-invese of the initial PCA =", rate_model, "%\n", file=file)
     file.close()
 
     return cpu_time, rate_o, rate_agg_o, rate_bm, rate_c, rate_model
@@ -532,17 +529,23 @@ def TrainingDataAugmentation(training_data_original_x, training_data_original_y,
             training_data_additional_y.append(np.argmax(predicted_x_i, 1)[0])
             print("cifar10vgg: Newly generated input data #", i, ", pre-trained model predicted label is ", training_data_additional_y[i])
     elif learning_model == 'GMM':
+        gmm = GaussianMixture(n_components = number_components).fit(training_data_original_x)
         for i in range(number_samples_additional):
             predicted_y_i = gmm.predict(np.array([training_data_additional_x_[i]]))[0]
             training_data_additional_y.append(predicted_y_i)
             print("GMM: Newly generated input data #", i, ", pre-trained model predicted label is ", training_data_additional_y[i])
-    elif learning_model == 'OlivettiSVM': 
+    elif learning_model == 'SVM': 
         svm = SVC(kernel = 'linear', random_state = 0)
         svm.fit(training_data_original_x, training_data_original_y)
         for i in range(number_samples_additional):
             predicted_y_i = svm.predict(np.array([training_data_additional_x_[i]]))[0]
             training_data_additional_y.append(predicted_y_i)
-            print("OlivettiSVM: Newly generated input data #", i, ", pre-trained model predicted label is ", training_data_additional_y[i])
+            print("SVM: Newly generated input data #", i, ", pre-trained model predicted label is ", training_data_additional_y[i])
+    elif learning_model == 'knn':
+        for i in range(number_samples_additional):
+            isclassified, predicted_y_i = knn(training_data_additional_x_[i], '', training_data_original_x, training_data_original_y, 1) 
+            training_data_additional_y.append(predicted_y_i)
+            print("knn: Newly generated input data #", i, ", pre-trained model predicted label is ", training_data_additional_y[i])
     else:
         print("No Pre-Trained Learning Model Chosen!\n")
         return None
@@ -577,13 +580,13 @@ if __name__ == "__main__":
     doCIFAR10 = 0
     doOlivetti = 0
     # the data preprocessing preliminary PCA reduction projection dimension
-    d_PCA = 64
+    d_PCA = 512
     # the secondary PCA embedding dimension in case we do a second PCA to dimension d_SecondPCA_beforeLPP before the kd-tree decomposition into clusters
     d_SecondPCA_kdtree = 128
     # the secondary PCA embedding dimension in case we do a second PCA for each cluster to dimension d_SecondPCA_kdtree before we do LPP on that cluster
     d_SecondPCA_beforeLPP = 100
     # the LPP embedding dimension = d_LPP on each given cluster
-    d_LPP = 32
+    d_LPP = 256
     # train_size = the training data size
     train_size = 150 * (2 ** 8)
     # ht = the partition tree height
@@ -593,7 +596,7 @@ if __name__ == "__main__":
 
     # choose to augment the original training data x and y globally by GMM sampling and pre-trained learning model prediction, use them to build the kd-tree and subspace model
     # in this case, the augmented data points will be used automatically in knn nearest neighbor clssification
-    doAugment_Global = 0
+    doAugment_Global = 1
     # the number of additional samples for the whole training set, in case we do augment the training set globally
     number_samples_additional_Global = 500 * (2**8)
     # the number of components used when generating new training data x globally for the whole training set, it is different from label y classes in the training data 
@@ -601,11 +604,11 @@ if __name__ == "__main__":
     # choose to augment the data_train_x_k and data_train_y_k within the kd tree cluster by augmentation and pre-trained learning model prediction, use them to build the subspace model
     doAugment_kdtreeCluster = 0
     # choose to use the augmented data developed for each kd tree cluster in doing nearest neighbor classification
-    doUseAugmentData_kdtreeCluster = 1
+    doUseAugmentData_kdtreeCluster = 0
     # the number of additional samples in a kd-tree cluster, in case we do augment training data within that kd-tree cluster
     number_samples_additional_kdtreeCluster = 500
     # the number of components used in augmentation when generating new training data x within a kd-tree cluster, it is different from label y classes in the training data 
-    number_components_kdtreeCluster = 10
+    number_components_kdtreeCluster = 2
     # pick the method of augmentation: GMM, UMAP
     doAugmentViaGMM = 1
     doAugmentViaUMAP = 0
@@ -613,14 +616,17 @@ if __name__ == "__main__":
     number_neighbors_UMAP = 20
     # pick the pre-trained learning model for labelling the augmented points
     doCIFAR10vgg = 0
-    doGMM = 1
-    doOlivettiSVM = 0
+    doGMM = 0
+    doSVM = 0
+    doknn = 1
     if doCIFAR10vgg:
         learning_model = 'cifar10vgg'  
     elif doGMM:
         learning_model = 'GMM' 
-    elif doOlivettiSVM:
-        learning_model = 'OlivettiSVM'
+    elif doSVM:
+        learning_model = 'SVM'
+    elif doknn:
+        learning_model = 'knn'
     else:
         learning_model = 'NoModel'
 

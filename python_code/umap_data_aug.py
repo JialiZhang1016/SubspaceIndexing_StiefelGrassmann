@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 """
 Created on Sat Jan  9 15:12:57 2021
-
 @author: Birendra Kathariya (UMKC) and Wenqing Hu (Missouri S&T)
 """
 
@@ -38,7 +37,6 @@ def sample_points(vertices, n_samples=500):
         It is a (n x m) array which represents the corner points of a convex-hull.
     n_samples : int, optional
         Number of samples to generate. The default is 500.
-
     Returns
     -------
     P : float
@@ -122,9 +120,9 @@ def UMAP_Augmentation(data, labels, number_components, number_samples, number_ne
 
 if __name__ == "__main__":
     
-    doMNIST = 0
+    doMNIST = 1
     doCIFAR10 = 0
-    doOlivetti = 1
+    doOlivetti = 0
 
     # load MNIST dataset
     if doMNIST:
@@ -188,10 +186,10 @@ if __name__ == "__main__":
             data_original_test["y"].append(y[indexes[350+i]])
 
 
-    data = np.array(data_original_train["x"])[:350]
-    labels = np.array(data_original_train["y"])[:350]
+    data = np.array(data_original_train["x"])[:60000]
+    labels = np.array(data_original_train["y"])[:60000]
 
-    number_samples = 500
+    number_samples = 10
     number_components = 2
     number_neighbors = 20
 
