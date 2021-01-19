@@ -429,6 +429,36 @@ def LPP_NearestNeighborTest():
     return cpu_time, rate_o, rate_agg_o, rate_bm, rate_c, rate_model
 
 
+# test of the classification rate using original full data set and original dimension
+# can choose the data set to be augmented by the pre-trained model, in a global fashion or by each cluster
+def OriginalFullDataSet_NearestNeighborTest():
+    # load data
+    data_original_train, data_original_test = load_data(doMNIST, doCIFAR10, doOlivetti)
+    # obtain the train, test sets in nwpu and the LPP frames Seq(:,:,k) for each cluster with indexes in leafs
+    data_train, leafs, data_test, inv_mat = LPP_ObtainData(data_original_train, data_original_test, d_PCA, d_SecondPCA_kdtree, train_size, test_size, ht)
+    # augment leaf by leaf
+    if doAugment_kdtreeCluster and doUseAugmentData_kdtreeCluster:
+        Seq, data_train, leafs = LPP_BuildDataModel(data_train, leafs, d_SecondPCA_beforeLPP, d_LPP, inv_mat, train_size)
+    # list of classified/not classified projections for using knn in the whole data set in itr original space
+    classified_fulldataset = np.zeros(test_size) 
+    for test_index in range(test_size):
+        print("\ntest point", test_index+1, " -----------------------------------------------------------\n")
+        x = data_test["x"][test_index]
+        y = data_test["y"][test_index]
+        # do k-nearest-neighbor classification for all training data in the original space
+        x_test = x
+        y_test = y
+        X_train = data_train["x"]
+        Y_train = data_train["y"]
+        isclassified_fulldataset, class_predict = knn(x_test, y_test, X_train, Y_train, k_nearest_neighbor)
+        classified_fulldataset[test_index] = isclassified_fulldataset
+        print("full dataset in original dimension classified =", isclassified_fulldataset)
+    # summarize the final result
+    rate_f = (sum(classified_fulldataset)/test_size)*100
+    print("\nfull data set original dimension classification rate = ", rate_f, "%")
+    return rate_f
+
+
 # given a set of training_data_original_x with labels training_data_original_y
 # generate a given number of additional training samples training_data_additional_x 
 # with training_data_additional_x, using a pre-trained learning_model, label each additional sample and produce corresponding labels training_data_additional_y
@@ -494,7 +524,6 @@ def TrainingDataAugmentation(training_data_original_x, training_data_original_y,
     return training_data_additional_x, training_data_additional_y
 
 
-
 """
 ################################ MAIN RUNNING FILE #####################################
 
@@ -515,8 +544,8 @@ if __name__ == "__main__":
     doSecondPCA_beforeLPP = 0
 
     # select which dataset to work on
-    doMNIST = 0
-    doCIFAR10 = 1
+    doMNIST = 1
+    doCIFAR10 = 0
     doOlivetti = 0
     # the data preprocessing preliminary PCA reduction projection dimension
     d_PCA = 512
@@ -535,15 +564,15 @@ if __name__ == "__main__":
 
     # choose to augment the original training data x and y globally by GMM sampling and pre-trained learning model prediction, use them to build the kd-tree and subspace model
     # in this case, the augmented data points will be used automatically in knn nearest neighbor clssification
-    doAugment_Global = 0
+    doAugment_Global = 1
     # the number of additional samples for the whole training set, in case we do augment the training set globally
-    number_samples_additional_Global = 400 * (2**8)
+    number_samples_additional_Global = 10000
     # the number of components used when generating new training data x globally for the whole training set, it is different from label y classes in the training data 
     number_components_Global = 10
     # choose to augment the data_train_x_k and data_train_y_k within the kd tree cluster by augmentation and pre-trained learning model prediction, use them to build the subspace model
-    doAugment_kdtreeCluster = 1
+    doAugment_kdtreeCluster = 0
     # choose to use the augmented data developed for each kd tree cluster in doing nearest neighbor classification
-    doUseAugmentData_kdtreeCluster = 1
+    doUseAugmentData_kdtreeCluster = 0
     # the number of additional samples in a kd-tree cluster, in case we do augment training data within that kd-tree cluster
     number_samples_additional_kdtreeCluster = 400
     # the number of components used in augmentation when generating new training data x within a kd-tree cluster, it is different from label y classes in the training data 
@@ -554,9 +583,9 @@ if __name__ == "__main__":
     # parameters for UMAP
     number_neighbors_UMAP = 20
     # pick the pre-trained learning model for labelling the augmented points
-    doCIFAR10vgg = 1
+    doCIFAR10vgg = 0
     doMNISTLeNetv2 = 0
-    doGMM = 0
+    doGMM = 1
     doSVM = 0
     doknn = 0
     if doCIFAR10vgg:
@@ -593,9 +622,9 @@ if __name__ == "__main__":
 
     # do the test of the classification rate using original full data set and original dimension
     # can choose the data set to be augmented by the pre-trained model, either globally or by each cluster 
-    doTestFullData_knn = 0
+    doTestFullData_knn = 1
     # do the LPP analysis on different datasets
-    doLPP_NearestNeighborTest = 1
+    doLPP_NearestNeighborTest = 0
 
     ###############################################################################################################
     ###########################                 end of parameter setting                ###########################
@@ -605,27 +634,7 @@ if __name__ == "__main__":
     # do the test of the classification rate using original full data set and original dimension
     # can choose the data set to be augmented by the pre-trained model, either globally or by each cluster 
     if doTestFullData_knn:
-        # load data
-        data_original_train, data_original_test = load_data(doMNIST, doCIFAR10, doOlivetti)
-        # obtain the train, test sets in nwpu and the LPP frames Seq(:,:,k) for each cluster with indexes in leafs
-        data_train, leafs, data_test, inv_mat = LPP_ObtainData(data_original_train, data_original_test, d_PCA, d_SecondPCA_kdtree, train_size, test_size, ht)
-        if doUseAugmentData_kdtreeCluster:
-            Seq, data_train, leafs = LPP_BuildDataModel(data_train, leafs, d_SecondPCA_beforeLPP, d_LPP, inv_mat, train_size)
-        classified_fulldataset = np.zeros(test_size) # list of classified/not classified projections for using knn in the whole data set in itr original space
-        for test_index in range(test_size):
-            print("\ntest point", test_index+1, " -----------------------------------------------------------\n")
-            x = data_test["x"][test_index]
-            y = data_test["y"][test_index]
-            # do k-nearest-neighbor classification for all training data in the original space
-            x_test = x
-            y_test = y
-            X_train = data_train["x"]
-            Y_train = data_train["y"]
-            isclassified_fulldataset, class_predict = knn(x_test, y_test, X_train, Y_train, k_nearest_neighbor)
-            classified_fulldataset[test_index] = isclassified_fulldataset
-            print("full dataset in original dimension classified =", isclassified_fulldataset)
-        # summarize the final result
-        print("\nfull data set original dimension classification rate = ", (sum(classified_fulldataset)/test_size)*100, "%")
+        rate_f = OriginalFullDataSet_NearestNeighborTest()
 
     # do the LPP analysis on different datasets
     if doLPP_NearestNeighborTest:
