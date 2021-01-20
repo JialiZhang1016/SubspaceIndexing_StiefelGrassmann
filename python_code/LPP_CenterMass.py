@@ -16,6 +16,7 @@ from sklearn.decomposition import PCA
 import tensorflow as tf
 import time
 from cifar10vgg import cifar10vgg
+from MNISTLeNetv2 import MNISTLeNetv2
 from sklearn.mixture import GaussianMixture
 from sklearn.svm import SVC
 import sklearn.datasets
@@ -25,7 +26,7 @@ from LPP_Auxiliary import knn, LPP, graph_laplacian, affinity_supervised
 
 # set the pre-trained learning models for labelling possibly augmented data points
 model_cifar10vgg = cifar10vgg()
-
+model_MNISTLeNetv2 = MNISTLeNetv2()
 
 # load the data set, MNIST or CIFAR-10
 def load_data(doMNIST, doCIFAR10, doOlivetti):
@@ -510,7 +511,8 @@ def TrainingDataAugmentation(training_data_original_x, training_data_original_y,
         model = model_MNISTLeNetv2
         for i in range(number_samples_additional):
             training_data_additional_x__i = np.matmul(training_data_additional_x_[i], inv_mat)
-            training_data_additional_x___i = np.reshape(training_data_additional_x__i.flatten(), (1, 64, 64))
+            training_data_additional_x___i = np.reshape(training_data_additional_x__i.flatten(), (1, 28, 28))
+            # Padding the images by 2 pixels since in the paper input images were 32x32
             training_data_additional_x____i = np.pad(training_data_additional_x___i[:,:,:, np.newaxis], ((0,0),(2,2),(2,2),(0,0)), 'constant')
             predicted_x_i = model.predict(training_data_additional_x____i)
             training_data_additional_y.append(np.argmax(predicted_x_i, 1)[0])
@@ -564,19 +566,19 @@ if __name__ == "__main__":
 
     # choose to augment the original training data x and y globally by GMM sampling and pre-trained learning model prediction, use them to build the kd-tree and subspace model
     # in this case, the augmented data points will be used automatically in knn nearest neighbor clssification
-    doAugment_Global = 1
+    doAugment_Global = 0
     # the number of additional samples for the whole training set, in case we do augment the training set globally
     number_samples_additional_Global = 10000
     # the number of components used when generating new training data x globally for the whole training set, it is different from label y classes in the training data 
     number_components_Global = 10
     # choose to augment the data_train_x_k and data_train_y_k within the kd tree cluster by augmentation and pre-trained learning model prediction, use them to build the subspace model
-    doAugment_kdtreeCluster = 0
+    doAugment_kdtreeCluster = 1
     # choose to use the augmented data developed for each kd tree cluster in doing nearest neighbor classification
-    doUseAugmentData_kdtreeCluster = 0
+    doUseAugmentData_kdtreeCluster = 1
     # the number of additional samples in a kd-tree cluster, in case we do augment training data within that kd-tree cluster
-    number_samples_additional_kdtreeCluster = 400
+    number_samples_additional_kdtreeCluster = 500
     # the number of components used in augmentation when generating new training data x within a kd-tree cluster, it is different from label y classes in the training data 
-    number_components_kdtreeCluster = 2
+    number_components_kdtreeCluster = 10
     # pick the method of augmentation: GMM, UMAP
     doAugmentViaGMM = 1
     doAugmentViaUMAP = 0
@@ -584,8 +586,8 @@ if __name__ == "__main__":
     number_neighbors_UMAP = 20
     # pick the pre-trained learning model for labelling the augmented points
     doCIFAR10vgg = 0
-    doMNISTLeNetv2 = 0
-    doGMM = 1
+    doMNISTLeNetv2 = 1
+    doGMM = 0
     doSVM = 0
     doknn = 0
     if doCIFAR10vgg:
@@ -622,9 +624,9 @@ if __name__ == "__main__":
 
     # do the test of the classification rate using original full data set and original dimension
     # can choose the data set to be augmented by the pre-trained model, either globally or by each cluster 
-    doTestFullData_knn = 1
+    doTestFullData_knn = 0
     # do the LPP analysis on different datasets
-    doLPP_NearestNeighborTest = 0
+    doLPP_NearestNeighborTest = 1
 
     ###############################################################################################################
     ###########################                 end of parameter setting                ###########################
