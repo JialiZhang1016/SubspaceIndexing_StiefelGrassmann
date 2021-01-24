@@ -303,79 +303,79 @@ def LPP_NearestNeighborTest():
         print("\ntest point", test_index+1, " -----------------------------------------------------------\n")
         x = data_test["x"][test_index]
         y = data_test["y"][test_index]
-#        # sort the cluster centers m_1, ..., m_{2^{ht}} by ascending distances to x 
-#        dist = [np.linalg.norm(x-m[k]) for k in range(2**ht)]
-#        indexes, dist_sort = zip(*sorted(enumerate(dist), key=itemgetter(1))) 
-#        # count the number of St(p, n) interpolation clusters for current test point x
-#        # interpolation_number = number of frames used for interpolation between cluster LDA frames
-#        interpolation_number = 1
-#        print("ratio between [", dist_sort[1]/dist_sort[0], ",", dist_sort[2**ht-1]/dist_sort[0], "]")
-#        ratio_seq[test_index][0] = dist_sort[1]/dist_sort[0]
-#        ratio_seq[test_index][1] = dist_sort[2**ht-1]/dist_sort[0]
-#        for k in range(1, 2**ht):
-#            if dist_sort[k] <= ratio_threshold * dist_sort[0]:
-#                interpolation_number = interpolation_number + 1
-#            else:
-#                break
-#        print("interpolation number = ", interpolation_number)
-#        # record the sequence of all interpolation numbers for each test point x
-#        interpolation_number_seq[test_index] = interpolation_number
-#        # find the LPP Stiefel projection frames A_k1, ..., A_k{interpolation_number} for the first (interpolation_number) closest clusters to x
-#        frames = np.zeros((interpolation_number, d_data, d_LPP))
-#        for i in range(interpolation_number):
-#            frames[i] = Seq[indexes[i]]
-#        # find the weights w_1, ..., w_{interpolation_number} for the first (interpolation_number) closest clusters to x
-#        w = [np.exp(-K * (dist_sort[i]**2)) for i in range(interpolation_number)]
-#        # collect all indexes in clusters corresponding to the first (interpolation_number) closest clusters to x
-#        aggregate_cluster = []
-#        for i in range(interpolation_number):
-#            aggregate_cluster = list(set(aggregate_cluster) | set(leafs[indexes[i]]))
-#        # do k-nearest-neighbor classification based on the closest cluster to x, in original space
-#        x_test = x
-#        y_test = y
-#        X_train = [data_train["x"][_] for _ in leafs[indexes[0]]]
-#        Y_train = [data_train["y"][_] for _ in leafs[indexes[0]]]
-#        isclassified_o, class_predict = knn(x_test, y_test, X_train, Y_train, k_nearest_neighbor)
-#        classified_o[test_index] = isclassified_o
-#        # do k-nearest-neighbor classification based on the (interpolation_number) nearest clusters to x, in oroginal space
-#        x_test = x
-#        y_test = y
-#        X_train = [data_train["x"][_] for _ in aggregate_cluster]
-#        Y_train = [data_train["y"][_] for _ in aggregate_cluster]
-#        isclassified_agg_o, class_predict = knn(x_test, y_test, X_train, Y_train, k_nearest_neighbor)
-#        classified_agg_o[test_index] = isclassified_agg_o
-#        # project x to A1 x and classify it using k-nearest-neighbor on the projection via A1 of the closest cluster
-#        x_test = np.matmul(x, frames[0])
-#        y_test = y
-#        X_train = [np.matmul(data_train["x"][_],  frames[0]) for _ in leafs[indexes[0]]]
-#        Y_train = [data_train["y"][_] for _ in leafs[indexes[0]]]
-#        isclassified_bm, class_predict = knn(x_test, y_test, X_train, Y_train, k_nearest_neighbor)
-#        classified_bm[test_index] = isclassified_bm
-#        # calculate the center of mass for the (interpolation_number) nearest cluster LPP frames with respect to weights w 
-#        if doGrassmannpFCenter:
-#            # do Grassmann center of mass method
-#            GrassmannOpt = Grassmann_Optimization(w, frames, threshold_gradnorm, threshold_fixedpoint, threshold_checkonGrassmann)
-#            if doGD:
-#                break
-#            else:
-#                center, value, grad = GrassmannOpt.Center_Mass_pFrobenius()
-#        else:
-#            # do Stiefel center of mass method
-#            StiefelOpt = Stiefel_Optimization(w, frames, threshold_gradnorm, threshold_fixedpoint, threshold_checkonStiefel, threshold_logStiefel)
-#            if doStiefelEuclidCenter:
-#                if doGD:
-#                    break
-#                else:
-#                    center, value, gradnorm = StiefelOpt.Center_Mass_Euclid()
-#            else:
-#                break
-#        # project x to center x and classify it using k-nearest-neighbor on the projection via center of all (interpolation number) clusters
-#        x_test = np.matmul(x , center)
-#        y_test = y
-#        X_train = [np.matmul(data_train["x"][_], center) for _ in aggregate_cluster]
-#        Y_train = [data_train["y"][_] for _ in aggregate_cluster]    
-#        isclassified_c, class_predict = knn(x_test, y_test, X_train, Y_train, k_nearest_neighbor)
-#        classified_c[test_index] = isclassified_c
+        # sort the cluster centers m_1, ..., m_{2^{ht}} by ascending distances to x 
+        dist = [np.linalg.norm(x-m[k]) for k in range(2**ht)]
+        indexes, dist_sort = zip(*sorted(enumerate(dist), key=itemgetter(1))) 
+        # count the number of St(p, n) interpolation clusters for current test point x
+        # interpolation_number = number of frames used for interpolation between cluster LDA frames
+        interpolation_number = 1
+        print("ratio between [", dist_sort[1]/dist_sort[0], ",", dist_sort[2**ht-1]/dist_sort[0], "]")
+        ratio_seq[test_index][0] = dist_sort[1]/dist_sort[0]
+        ratio_seq[test_index][1] = dist_sort[2**ht-1]/dist_sort[0]
+        for k in range(1, 2**ht):
+            if dist_sort[k] <= ratio_threshold * dist_sort[0]:
+                interpolation_number = interpolation_number + 1
+            else:
+                break
+        print("interpolation number = ", interpolation_number)
+        # record the sequence of all interpolation numbers for each test point x
+        interpolation_number_seq[test_index] = interpolation_number
+        # find the LPP Stiefel projection frames A_k1, ..., A_k{interpolation_number} for the first (interpolation_number) closest clusters to x
+        frames = np.zeros((interpolation_number, d_data, d_LPP))
+        for i in range(interpolation_number):
+            frames[i] = Seq[indexes[i]]
+        # find the weights w_1, ..., w_{interpolation_number} for the first (interpolation_number) closest clusters to x
+        w = [np.exp(-K * (dist_sort[i]**2)) for i in range(interpolation_number)]
+        # collect all indexes in clusters corresponding to the first (interpolation_number) closest clusters to x
+        aggregate_cluster = []
+        for i in range(interpolation_number):
+            aggregate_cluster = list(set(aggregate_cluster) | set(leafs[indexes[i]]))
+        # do k-nearest-neighbor classification based on the closest cluster to x, in original space
+        x_test = x
+        y_test = y
+        X_train = [data_train["x"][_] for _ in leafs[indexes[0]]]
+        Y_train = [data_train["y"][_] for _ in leafs[indexes[0]]]
+        isclassified_o, class_predict = knn(x_test, y_test, X_train, Y_train, k_nearest_neighbor)
+        classified_o[test_index] = isclassified_o
+        # do k-nearest-neighbor classification based on the (interpolation_number) nearest clusters to x, in oroginal space
+        x_test = x
+        y_test = y
+        X_train = [data_train["x"][_] for _ in aggregate_cluster]
+        Y_train = [data_train["y"][_] for _ in aggregate_cluster]
+        isclassified_agg_o, class_predict = knn(x_test, y_test, X_train, Y_train, k_nearest_neighbor)
+        classified_agg_o[test_index] = isclassified_agg_o
+        # project x to A1 x and classify it using k-nearest-neighbor on the projection via A1 of the closest cluster
+        x_test = np.matmul(x, frames[0])
+        y_test = y
+        X_train = [np.matmul(data_train["x"][_],  frames[0]) for _ in leafs[indexes[0]]]
+        Y_train = [data_train["y"][_] for _ in leafs[indexes[0]]]
+        isclassified_bm, class_predict = knn(x_test, y_test, X_train, Y_train, k_nearest_neighbor)
+        classified_bm[test_index] = isclassified_bm
+        # calculate the center of mass for the (interpolation_number) nearest cluster LPP frames with respect to weights w 
+        if doGrassmannpFCenter:
+            # do Grassmann center of mass method
+            GrassmannOpt = Grassmann_Optimization(w, frames, threshold_gradnorm, threshold_fixedpoint, threshold_checkonGrassmann)
+            if doGD:
+                break
+            else:
+                center, value, grad = GrassmannOpt.Center_Mass_pFrobenius()
+        else:
+            # do Stiefel center of mass method
+            StiefelOpt = Stiefel_Optimization(w, frames, threshold_gradnorm, threshold_fixedpoint, threshold_checkonStiefel, threshold_logStiefel)
+            if doStiefelEuclidCenter:
+                if doGD:
+                    break
+                else:
+                    center, value, gradnorm = StiefelOpt.Center_Mass_Euclid()
+            else:
+                break
+        # project x to center x and classify it using k-nearest-neighbor on the projection via center of all (interpolation number) clusters
+        x_test = np.matmul(x , center)
+        y_test = y
+        X_train = [np.matmul(data_train["x"][_], center) for _ in aggregate_cluster]
+        Y_train = [data_train["y"][_] for _ in aggregate_cluster]    
+        isclassified_c, class_predict = knn(x_test, y_test, X_train, Y_train, k_nearest_neighbor)
+        classified_c[test_index] = isclassified_c
         # classify x using pre-trained learning model
         x_test = x
         y_test = y
@@ -402,45 +402,41 @@ def LPP_NearestNeighborTest():
             isclassified_model = 0
         classified_model[test_index] = isclassified_model
         
-#        # output the result
-#        print("original dimension classified =", isclassified_o)
-#        print("original dimension aggregate classified =", isclassified_agg_o)
-#        print("benchmark classified =", isclassified_bm)
-#        print("center mass classfied =", isclassified_c)
+        # output the result
+        print("original dimension classified =", isclassified_o)
+        print("original dimension aggregate classified =", isclassified_agg_o)
+        print("benchmark classified =", isclassified_bm)
+        print("center mass classfied =", isclassified_c)
         print("pre-trained model clssified =", isclassified_model)
 
-#    # summarize the final result
+    # summarize the final result
     cpu_time_end = time.process_time()
     cpu_time = cpu_time_end - cpu_time_start
-#    rate_o = (sum(classified_o)/test_size)*100
-#    rate_agg_o = (sum(classified_agg_o)/test_size)*100
-#    rate_bm = (sum(classified_bm)/test_size)*100
-#    rate_c = (sum(classified_c)/test_size)*100
+    rate_o = (sum(classified_o)/test_size)*100
+    rate_agg_o = (sum(classified_agg_o)/test_size)*100
+    rate_bm = (sum(classified_bm)/test_size)*100
+    rate_c = (sum(classified_c)/test_size)*100
     rate_model = (sum(classified_model)/test_size)*100
     print("\n******************** CONCLUSION ********************")
     print("\ncpu runtime for testing = ", cpu_time_end - cpu_time_start, " seconds \n")
     print("\nClassification rates\n")
- #   print("\nOption 1. using the original data point and nearest cluster: ", rate_o, "%")
- #   print("\nOption 2. using the original data point and nearest (interpolation_number) clusters:", rate_agg_o, "%")
- #   print("\nOption 3. using the nearest cluster LPP frame after LPP projection, benchmark: ", rate_bm, "%")
- #   print("\nOption 4. using the Grassmann center obtained from several nearest cluster LPP frames after LPP projection:", rate_c, "%")
+    print("\nOption 1. using the original data point and nearest cluster: ", rate_o, "%")
+    print("\nOption 2. using the original data point and nearest (interpolation_number) clusters:", rate_agg_o, "%")
+    print("\nOption 3. using the nearest cluster LPP frame after LPP projection, benchmark: ", rate_bm, "%")
+    print("\nOption 4. using the Grassmann center obtained from several nearest cluster LPP frames after LPP projection:", rate_c, "%")
     print("\nOption 5. using the pre-trained learning model and the pseudo-invese of the initial PCA =", rate_model, "%\n")
 
- #   file=open('conclusion.txt', 'w')
- #   print("\n******************** CONCLUSION ********************", file=file)
- #   print("\ncpu runtime for testing = ", cpu_time_end - cpu_time_start, " seconds \n", file=file)
- #   print("\nClassification rates\n", file=file)
- #   print("\nOption 1. using the original data point and nearest cluster: ", rate_o, "%", file=file)
- #   print("\nOption 2. using the original data point and nearest (interpolation_number) clusters:", rate_agg_o, "%", file=file)
- #   print("\nOption 3. using the nearest cluster LPP frame after LPP projection, benchmark: ", rate_bm, "%", file=file)
- #   print("\nOption 4. using the Grassmann center obtained from several nearest cluster LPP frames after LPP projection:", rate_c, "%", file=file)
- #   print("\nOption 5. using the pre-trained learning model and the pseudo-invese of the initial PCA =", rate_model, "%\n", file=file)
- #   file.close()
+    file=open('conclusion.txt', 'w')
+    print("\n******************** CONCLUSION ********************", file=file)
+    print("\ncpu runtime for testing = ", cpu_time_end - cpu_time_start, " seconds \n", file=file)
+    print("\nClassification rates\n", file=file)
+    print("\nOption 1. using the original data point and nearest cluster: ", rate_o, "%", file=file)
+    print("\nOption 2. using the original data point and nearest (interpolation_number) clusters:", rate_agg_o, "%", file=file)
+    print("\nOption 3. using the nearest cluster LPP frame after LPP projection, benchmark: ", rate_bm, "%", file=file)
+    print("\nOption 4. using the Grassmann center obtained from several nearest cluster LPP frames after LPP projection:", rate_c, "%", file=file)
+    print("\nOption 5. using the pre-trained learning model and the pseudo-invese of the initial PCA =", rate_model, "%\n", file=file)
+    file.close()
 
-    rate_o=0
-    rate_agg_o=0
-    rate_bm=0
-    rate_c=0
     return cpu_time, rate_o, rate_agg_o, rate_bm, rate_c, rate_model
 
 
