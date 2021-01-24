@@ -387,7 +387,7 @@ def LPP_NearestNeighborTest():
             predicted_x = model.predict(x_test___)
             class_predict = np.argmax(predicted_x, 1)[0]
             isclassified_model = (class_predict == y) + 0
-        elif learning_model == 'GMM': #'MNISTLeNetv2':
+        elif learning_model == 'MNISTLeNetv2':
             model = model_MNISTLeNetv2
             x_test_ = [x_test]
             x_test__ = np.matmul(x_test_, inv_mat)
