@@ -57,3 +57,7 @@ build a pre-trained vgg model for cifar10, can also train a new cifar10. Pre-tra
 (b-7) umap_data_aug.py
 
 generate new pseudo data points based on current data set using the UMAP and 2-simplices
+
+(b-8) MNISTLeNetv2.py
+
+build a pre-trained LeNetv2 model for MNIST.  
