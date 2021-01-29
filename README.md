@@ -1,6 +1,6 @@
 <b>Subspace indexing on Stiefel and Grassmann manifolds</b>
 
-a project by Wenqing Hu, Tiefeng Jiang and Li Zhu
+a project by Wenqing Hu, Tiefeng Jiang, Li Zhu, Birendra Kathariya and Vikram Abrol
 
 <b>(a) folder "matlab_code"</b>
 
