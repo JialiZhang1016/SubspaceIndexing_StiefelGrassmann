@@ -22,14 +22,15 @@ from sklearn.svm import SVC
 import sklearn.datasets
 from sklearn.datasets import fetch_olivetti_faces
 from LPP_Auxiliary import knn, LPP, graph_laplacian, affinity_supervised
+import scipy.io
 
 
 # set the pre-trained learning models for labelling possibly augmented data points
 model_cifar10vgg = cifar10vgg()
 model_MNISTLeNetv2 = MNISTLeNetv2()
 
-# load the data set, MNIST or CIFAR-10
-def load_data(doMNIST, doCIFAR10, doOlivetti):
+# load the data set
+def load_data(doMNIST, doCIFAR10, doOlivetti, dovgg_faces):
     # load MNIST dataset
     if doMNIST:
         # load the MNIST dataset
@@ -89,6 +90,34 @@ def load_data(doMNIST, doCIFAR10, doOlivetti):
         for i in range(50):
             data_original_test["x"].append(np.reshape(x[350+i], 4096))
             data_original_test["y"].append(y[350+i])
+    # load the vgg_faces data set
+    if dovgg_faces:
+        # load the vgg_faces dataset
+        # structure: ["classes": np,shape(number_in_class, features)]
+        vgg_faces = scipy.io.loadmat('vgg_faces.mat')
+        # preprocess the dataset to fit the format we use
+        data_original = {"x": [], "y": []}
+        # extract the data sets
+        keys = list(vgg_faces.keys())
+        num_classes = len(keys)
+        for i in range(3, num_classes):
+            num_faces = len(vgg_faces[keys[i]])
+            for j in range(num_faces):
+                data_original["x"].append(list(vgg_faces[keys[i]][j]))
+                data_original["y"].append(i)
+        num_total_faces = len(data_original["y"])
+        # split into the training and testing data sets
+        data_original_train = {"x": [], "y": []}
+        data_original_test = {"x": [], "y": []}
+        # extract the training and testing data sets
+        indexes = np.random.permutation(num_total_faces)
+        train_size = int(0.66*num_total_faces)
+        train_indexes = [indexes[_] for _ in range(train_size)]
+        test_indexes = [indexes[_] for _ in range(train_size, num_total_faces)]
+        data_original_train["x"] = [data_original["x"][_] for _ in train_indexes]
+        data_original_train["y"] = [data_original["y"][_] for _ in train_indexes]
+        data_original_test["x"] = [data_original["x"][_] for _ in test_indexes]
+        data_original_test["y"] = [data_original["y"][_] for _ in test_indexes]
 
     return data_original_train, data_original_test
 
@@ -270,7 +299,7 @@ def LPP_BuildDataModel(data_train, leafs, d_SecondPCA_beforeLPP, d_LPP, inv_mat,
 def LPP_NearestNeighborTest():
 
     # load data
-    data_original_train, data_original_test = load_data(doMNIST, doCIFAR10, doOlivetti)
+    data_original_train, data_original_test = load_data(doMNIST, doCIFAR10, doOlivetti, dovgg_faces)
 
     # obtain the train, test sets in nwpu and the LPP frames Seq(:,:,k) for each cluster with indexes in leafs
     data_train, leafs, data_test, inv_mat = LPP_ObtainData(data_original_train, data_original_test, d_PCA, d_SecondPCA_kdtree, train_size, test_size, ht)
@@ -556,23 +585,24 @@ if __name__ == "__main__":
     doSecondPCA_beforeLPP = 0
 
     # select which dataset to work on
-    doMNIST = 1
+    doMNIST = 0
     doCIFAR10 = 0
     doOlivetti = 0
+    dovgg_faces = 1
     # the data preprocessing preliminary PCA reduction projection dimension
-    d_PCA = 128
+    d_PCA = 256
     # the secondary PCA embedding dimension in case we do a second PCA to dimension d_SecondPCA_beforeLPP before the kd-tree decomposition into clusters
     d_SecondPCA_kdtree = 128
     # the secondary PCA embedding dimension in case we do a second PCA for each cluster to dimension d_SecondPCA_kdtree before we do LPP on that cluster
     d_SecondPCA_beforeLPP = 100
     # the LPP embedding dimension = d_LPP on each given cluster
-    d_LPP = 64
+    d_LPP = 128
     # train_size = the training data size
-    train_size = 60000
+    train_size = 3000
     # ht = the partition tree height
-    ht = 8
+    ht = 3
     # test_size = the test data size
-    test_size = 100
+    test_size = 1000
 
     # choose to augment the original training data x and y globally by GMM sampling and pre-trained learning model prediction, use them to build the kd-tree and subspace model
     # in this case, the augmented data points will be used automatically in knn nearest neighbor clssification
@@ -586,7 +616,7 @@ if __name__ == "__main__":
     # choose to use the augmented data developed for each kd tree cluster in doing nearest neighbor classification
     doUseAugmentData_kdtreeCluster = 1
     # the number of additional samples in a kd-tree cluster, in case we do augment training data within that kd-tree cluster
-    number_samples_additional_kdtreeCluster = 500
+    number_samples_additional_kdtreeCluster = 1000
     # the number of components used in augmentation when generating new training data x within a kd-tree cluster, it is different from label y classes in the training data 
     number_components_kdtreeCluster = 10
     # pick the method of augmentation: GMM, UMAP
@@ -597,7 +627,7 @@ if __name__ == "__main__":
     # pick the pre-trained learning model for labelling the augmented points
     doCIFAR10vgg = 0
     doMNISTLeNetv2 = 0
-    doGMM = 1
+    doGMM = 0
     doSVM = 0
     doknn = 0
     if doCIFAR10vgg:
@@ -651,4 +681,3 @@ if __name__ == "__main__":
     # do the LPP analysis on different datasets
     if doLPP_NearestNeighborTest:
         cpu_time, rate_o, rate_agg_o, rate_bm, rate_c, rate_model = LPP_NearestNeighborTest()
-
