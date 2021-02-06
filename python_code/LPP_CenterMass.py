@@ -97,8 +97,10 @@ def load_data(doMNIST, doCIFAR10, doOlivetti, dovgg_faces):
         # preprocess the dataset to fit the format we use
         data_original = {"x": [], "y": []}
         keys_index = 0
-        for fileindex in [2, 6, 7, 8, 9]:
+        file=open('vgg_face_names.txt', 'w')
+        for fileindex in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]:
             vgg_faces = scipy.io.loadmat('Batch'+str(fileindex)+'vgg_f.mat')
+            vgg_labels = scipy.io.loadmat('label_batch'+str(fileindex)+'.mat')
             # extract the data sets
             keys = list(vgg_faces.keys())
             num_classes = len(keys)
@@ -107,14 +109,17 @@ def load_data(doMNIST, doCIFAR10, doOlivetti, dovgg_faces):
                 for j in range(num_faces):
                     data_original["x"].append(list(vgg_faces[keys[i]][j]))
                     data_original["y"].append(keys_index)
+                print("keys index ", keys_index, " name is ", vgg_labels[keys[i]][0])
+                print("keys index ", keys_index, " name is ", vgg_labels[keys[i]][0], file=file)
                 keys_index = keys_index + 1 
+        file.close()
         num_total_faces = len(data_original["y"])
         # split into the training and testing data sets
         data_original_train = {"x": [], "y": []}
         data_original_test = {"x": [], "y": []}
         # extract the training and testing data sets
         indexes = np.random.permutation(num_total_faces)
-        train_size = int(0.85*num_total_faces)
+        train_size = int(0.95*num_total_faces)
         train_indexes = [indexes[_] for _ in range(train_size)]
         test_indexes = [indexes[_] for _ in range(train_size, num_total_faces)]
         data_original_train["x"] = [data_original["x"][_] for _ in train_indexes]
@@ -601,9 +606,9 @@ if __name__ == "__main__":
     # the LPP embedding dimension = d_LPP on each given cluster
     d_LPP = 128
     # train_size = the training data size
-    train_size = 40000
+    train_size = 100000
     # ht = the partition tree height
-    ht = 3
+    ht = 5
     # test_size = the test data size
     test_size = 100
 
