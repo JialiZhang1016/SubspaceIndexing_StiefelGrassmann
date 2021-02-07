@@ -96,8 +96,6 @@ def load_data(doMNIST, doCIFAR10, doOlivetti, dovgg_faces):
         # structure: ["classes": np.shape(number_in_class, features)]
         # preprocess the dataset to fit the format we use
         data_original = {"x": [], "y": []}
-        keys_index = 0
-        file=open('vgg_face_names.txt', 'w')
         for fileindex in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]:
             vgg_faces = scipy.io.loadmat('Batch'+str(fileindex)+'vgg_f.mat')
             vgg_labels = scipy.io.loadmat('label_batch'+str(fileindex)+'.mat')
@@ -108,12 +106,29 @@ def load_data(doMNIST, doCIFAR10, doOlivetti, dovgg_faces):
                 num_faces = len(vgg_faces[keys[i]])
                 for j in range(num_faces):
                     data_original["x"].append(list(vgg_faces[keys[i]][j]))
-                    data_original["y"].append(keys_index)
-                print("keys index ", keys_index, " name is ", vgg_labels[keys[i]][0])
-                print("keys index ", keys_index, " name is ", vgg_labels[keys[i]][0], file=file)
-                keys_index = keys_index + 1 
+                    data_original["y"].append(vgg_labels[keys[i]][0])
+        # turn the names to indexes in data_original["y"]
+        from sklearn.preprocessing import LabelEncoder
+        # creating instance of labelencoder
+        le = LabelEncoder()
+        le.fit(data_original["y"])
+        le_name_mapping = dict(zip(le.transform(le.classes_), le.classes_))
+        file=open('vgg_face_names.txt', 'w')
+        for i in range(len(le_name_mapping)):
+            print(i, le_name_mapping[i], file=file)
+            print(i, le_name_mapping[i])
         file.close()
+        data_original["y"] = le.transform(data_original["y"])
         num_total_faces = len(data_original["y"])
+        file=open('vgg_face_names.txt', 'r')
+        dict_temp = {}
+        for line in file.readlines():
+            line = line.strip()
+            k = line.split(' ')[0]
+            v = line.split(' ')[1]
+            dict_temp[k] = v
+        print(dict_temp)
+        file.close()
         # split into the training and testing data sets
         data_original_train = {"x": [], "y": []}
         data_original_test = {"x": [], "y": []}
@@ -481,7 +496,7 @@ def LPP_NearestNeighborTest():
 # can choose the data set to be augmented by the pre-trained model, in a global fashion or by each cluster
 def OriginalFullDataSet_NearestNeighborTest():
     # load data
-    data_original_train, data_original_test = load_data(doMNIST, doCIFAR10, doOlivetti)
+    data_original_train, data_original_test = load_data(doMNIST, doCIFAR10, doOlivetti, dovgg_faces)
     # obtain the train, test sets in nwpu and the LPP frames Seq(:,:,k) for each cluster with indexes in leafs
     data_train, leafs, data_test, inv_mat = LPP_ObtainData(data_original_train, data_original_test, d_PCA, d_SecondPCA_kdtree, train_size, test_size, ht)
     # augment leaf by leaf
