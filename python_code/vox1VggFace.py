@@ -4,8 +4,6 @@
 This is a Keras model based on VGG16 architecture for vox1 dataset.
 it can be used with pretrained weights file generated from Vgg face model https://www.robots.ox.ac.uk/~vgg/software/vgg_face/.
 
-Author: Vikram Abrol (UMKC) and Wenqing Hu (Missouri S&T)
-
 References:
 
 [1] O. M. Parkhi, A. Vedaldi, A. Zisserman
@@ -266,7 +264,7 @@ class vggFace:
         person = classifier_model.predict(embed)
         person_index = np.argmax(person, 1)
         name = [le_name_mapping[person_index[_]] for _ in range(len(person_index))]
-        return person_index
+        return person_index, name
 
 
 if __name__ == '__main__':
