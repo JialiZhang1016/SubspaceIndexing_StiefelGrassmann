@@ -23,11 +23,13 @@ import sklearn.datasets
 from sklearn.datasets import fetch_olivetti_faces
 from LPP_Auxiliary import knn, LPP, graph_laplacian, affinity_supervised
 import scipy.io
+from vox1VggFace import vggFace
 
 
 # set the pre-trained learning models for labelling possibly augmented data points
 model_cifar10vgg = cifar10vgg()
 model_MNISTLeNetv2 = MNISTLeNetv2()
+model_vgg_faces = vggFace()
 
 # load the data set
 def load_data(doMNIST, doCIFAR10, doOlivetti, dovgg_faces):
@@ -97,8 +99,8 @@ def load_data(doMNIST, doCIFAR10, doOlivetti, dovgg_faces):
         # preprocess the dataset to fit the format we use
         data_original = {"x": [], "y": []}
         for fileindex in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]:
-            vgg_faces = scipy.io.loadmat('Batch'+str(fileindex)+'vgg_f.mat')
-            vgg_labels = scipy.io.loadmat('label_batch'+str(fileindex)+'.mat')
+            vgg_faces = scipy.io.loadmat('data\\Batch'+str(fileindex)+'vgg_f.mat')
+            vgg_labels = scipy.io.loadmat('data\\label_batch'+str(fileindex)+'.mat')
             # extract the data sets
             keys = list(vgg_faces.keys())
             num_classes = len(keys)
@@ -118,17 +120,19 @@ def load_data(doMNIST, doCIFAR10, doOlivetti, dovgg_faces):
             print(i, le_name_mapping[i], file=file)
             print(i, le_name_mapping[i])
         file.close()
-        data_original["y"] = le.transform(data_original["y"])
-        num_total_faces = len(data_original["y"])
+        # store the index-name correspondence to le_name_mapping
         file=open('vgg_face_names.txt', 'r')
-        dict_temp = {}
+        le_name_mapping = {}
         for line in file.readlines():
             line = line.strip()
             k = line.split(' ')[0]
             v = line.split(' ')[1]
-            dict_temp[k] = v
-        print(dict_temp)
+            le_name_mapping[k] = v
+        print(le_name_mapping)
         file.close()
+        # create the label data 0-206
+        data_original["y"] = le.transform(data_original["y"])
+        num_total_faces = len(data_original["y"])
         # split into the training and testing data sets
         data_original_train = {"x": [], "y": []}
         data_original_test = {"x": [], "y": []}
@@ -518,7 +522,10 @@ def OriginalFullDataSet_NearestNeighborTest():
         print("full dataset in original dimension classified =", isclassified_fulldataset)
     # summarize the final result
     rate_f = (sum(classified_fulldataset)/test_size)*100
+    file=open('conclusion_originalknn.txt', 'w')
     print("\nfull data set original dimension classification rate = ", rate_f, "%")
+    print("\nfull data set original dimension classification rate = ", rate_f, "%", file=file)
+    file.close()
     return rate_f
 
 
@@ -579,6 +586,16 @@ def TrainingDataAugmentation(training_data_original_x, training_data_original_y,
             predicted_x_i = model.predict(training_data_additional_x____i)
             training_data_additional_y.append(np.argmax(predicted_x_i, 1)[0])
             print("MNISTLeNetv2: Newly generated input data #", i, ", pre-trained model predicted label is ", training_data_additional_y[i])
+    elif learning_model == 'vgg_faces_classifier':
+        model = model_vgg_faces
+        classifier = model.classifier(np.matmul(np.array(training_data_original_x), inv_mat), np.array([]),np.array([]),np.array([]))
+        for i in range(number_samples_additional):
+            training_data_additional_x__i = np.matmul(training_data_additional_x_[i], inv_mat)
+            training_data_additional_x___i = np.reshape(training_data_additional_x__i.flatten(), (1,2622))
+            training_data_additional_x____i = np.array(training_data_additional_x___i)
+            predicted_x_i = model.predict_label_name_embedded(training_data_additional_x____i, classifier)
+            training_data_additional_y.append(predicted_x_i[0])
+            print("vggFaces: Newly generated input data #", i, ", pre-trained model predicted label is ", training_data_additional_y[i])
     else:
         print("No Pre-Trained Learning Model Chosen!\n")
         return None
@@ -623,9 +640,9 @@ if __name__ == "__main__":
     # train_size = the training data size
     train_size = 100000
     # ht = the partition tree height
-    ht = 5
+    ht = 8
     # test_size = the test data size
-    test_size = 100
+    test_size = 1000
 
     # choose to augment the original training data x and y globally by GMM sampling and pre-trained learning model prediction, use them to build the kd-tree and subspace model
     # in this case, the augmented data points will be used automatically in knn nearest neighbor clssification
@@ -635,13 +652,13 @@ if __name__ == "__main__":
     # the number of components used when generating new training data x globally for the whole training set, it is different from label y classes in the training data 
     number_components_Global = 10
     # choose to augment the data_train_x_k and data_train_y_k within the kd tree cluster by augmentation and pre-trained learning model prediction, use them to build the subspace model
-    doAugment_kdtreeCluster = 0
+    doAugment_kdtreeCluster = 1
     # choose to use the augmented data developed for each kd tree cluster in doing nearest neighbor classification
     doUseAugmentData_kdtreeCluster = 1
     # the number of additional samples in a kd-tree cluster, in case we do augment training data within that kd-tree cluster
     number_samples_additional_kdtreeCluster = 1000
     # the number of components used in augmentation when generating new training data x within a kd-tree cluster, it is different from label y classes in the training data 
-    number_components_kdtreeCluster = 10
+    number_components_kdtreeCluster = 100
     # pick the method of augmentation: GMM, UMAP
     doAugmentViaGMM = 1
     doAugmentViaUMAP = 0
@@ -650,13 +667,16 @@ if __name__ == "__main__":
     # pick the pre-trained learning model for labelling the augmented points
     doCIFAR10vgg = 0
     doMNISTLeNetv2 = 0
+    dovgg_faces_classifier = 1
     doGMM = 0
     doSVM = 0
     doknn = 0
     if doCIFAR10vgg:
         learning_model = 'cifar10vgg'
     elif doMNISTLeNetv2:
-        learning_model = 'MNISTLeNetv2'  
+        learning_model = 'MNISTLeNetv2' 
+    elif dovgg_faces_classifier:
+        learning_model = 'vgg_faces_classifier' 
     elif doGMM:
         learning_model = 'GMM' 
     elif doSVM:
