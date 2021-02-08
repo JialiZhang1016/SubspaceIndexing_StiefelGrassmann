@@ -4,6 +4,8 @@
 This is a Keras model based on VGG16 architecture for vox1 dataset.
 it can be used with pretrained weights file generated from Vgg face model https://www.robots.ox.ac.uk/~vgg/software/vgg_face/.
 
+Author: Vikram Abrol (UMKC) and Wenqing Hu (Missouri S&T)
+
 References:
 
 [1] O. M. Parkhi, A. Vedaldi, A. Zisserman
