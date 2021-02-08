@@ -61,3 +61,7 @@ generate new pseudo data points based on current data set using the UMAP and 2-s
 (b-8) MNISTLeNetv2.py
 
 build a pre-trained LeNetv2 model for MNIST.  
+
+(b-9) vox1VggFace.py
+
+buile a pre-trained vgg model for the face data set
