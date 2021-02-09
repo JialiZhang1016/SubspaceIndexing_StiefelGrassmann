@@ -453,6 +453,16 @@ def LPP_NearestNeighborTest():
             predicted_x = model.predict(x_test____)
             class_predict = np.argmax(predicted_x, 1)[0]
             isclassified_model = (class_predict == y) + 0
+        elif learning_model == 'vgg_faces_classifier':
+            model = model_vgg_faces
+            x_test_ = [x_test]
+            x_test__ = np.matmul(x_test_, inv_mat)
+            classifier = model.classifier(np.array(x_test__), np.array([]),np.array([]),np.array([]))
+            x_test___ = np.reshape(x_test__.flatten(), (1,2622))
+            x_test____ = np.array(x_test___)
+            predicted_x = model.predict_label_embedded(x_test____, classifier)
+            class_predict = predicted_x[0]
+            isclassified_model = (class_predict == y) + 0
         else: 
             print("No pre-trained mode prediction! Working with only the", learning_model, "model.\n")
             isclassified_model = 0
@@ -593,7 +603,7 @@ def TrainingDataAugmentation(training_data_original_x, training_data_original_y,
             training_data_additional_x__i = np.matmul(training_data_additional_x_[i], inv_mat)
             training_data_additional_x___i = np.reshape(training_data_additional_x__i.flatten(), (1,2622))
             training_data_additional_x____i = np.array(training_data_additional_x___i)
-            predicted_x_i = model.predict_label_name_embedded(training_data_additional_x____i, classifier)
+            predicted_x_i = model.predict_label_embedded(training_data_additional_x____i, classifier)
             training_data_additional_y.append(predicted_x_i[0])
             print("vggFaces: Newly generated input data #", i, ", pre-trained model predicted label is ", training_data_additional_y[i])
     else:
@@ -640,9 +650,9 @@ if __name__ == "__main__":
     # train_size = the training data size
     train_size = 100000
     # ht = the partition tree height
-    ht = 8
+    ht = 2
     # test_size = the test data size
-    test_size = 1000
+    test_size = 100
 
     # choose to augment the original training data x and y globally by GMM sampling and pre-trained learning model prediction, use them to build the kd-tree and subspace model
     # in this case, the augmented data points will be used automatically in knn nearest neighbor clssification
@@ -652,7 +662,7 @@ if __name__ == "__main__":
     # the number of components used when generating new training data x globally for the whole training set, it is different from label y classes in the training data 
     number_components_Global = 10
     # choose to augment the data_train_x_k and data_train_y_k within the kd tree cluster by augmentation and pre-trained learning model prediction, use them to build the subspace model
-    doAugment_kdtreeCluster = 1
+    doAugment_kdtreeCluster = 0
     # choose to use the augmented data developed for each kd tree cluster in doing nearest neighbor classification
     doUseAugmentData_kdtreeCluster = 1
     # the number of additional samples in a kd-tree cluster, in case we do augment training data within that kd-tree cluster
