@@ -650,7 +650,7 @@ if __name__ == "__main__":
     # train_size = the training data size
     train_size = 100000
     # ht = the partition tree height
-    ht = 2
+    ht = 8
     # test_size = the test data size
     test_size = 100
 
@@ -662,7 +662,7 @@ if __name__ == "__main__":
     # the number of components used when generating new training data x globally for the whole training set, it is different from label y classes in the training data 
     number_components_Global = 10
     # choose to augment the data_train_x_k and data_train_y_k within the kd tree cluster by augmentation and pre-trained learning model prediction, use them to build the subspace model
-    doAugment_kdtreeCluster = 0
+    doAugment_kdtreeCluster = 1
     # choose to use the augmented data developed for each kd tree cluster in doing nearest neighbor classification
     doUseAugmentData_kdtreeCluster = 1
     # the number of additional samples in a kd-tree cluster, in case we do augment training data within that kd-tree cluster

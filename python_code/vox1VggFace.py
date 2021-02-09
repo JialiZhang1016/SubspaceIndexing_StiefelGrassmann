@@ -4,6 +4,8 @@
 This is a Keras model based on VGG16 architecture for vox1 dataset.
 it can be used with pretrained weights file generated from Vgg face model https://www.robots.ox.ac.uk/~vgg/software/vgg_face/.
 
+@author: Vikram Abrol (UMKC) and Wenqing Hu (Missouri S&T)
+
 References:
 
 [1] O. M. Parkhi, A. Vedaldi, A. Zisserman
@@ -173,7 +175,7 @@ class vggFace:
         data_original_test = {"x": [], "y": []}
         # extract the training and testing data sets
         indexes = np.random.permutation(num_total_faces)
-        train_size = int(0.95 * num_total_faces)
+        train_size = int(0.9 * num_total_faces)
 
         train_indexes = [indexes[_] for _ in range(train_size)]
         test_indexes = [indexes[_] for _ in range(train_size, num_total_faces)]
@@ -194,14 +196,14 @@ class vggFace:
 
         return x_train, y_train, x_test, y_test, le_name_mapping
 
-    def classifier(self, x_train, y_train, x_test, y_test, epochs=50, train=0):
+    def classifier(self, x_train, y_train, x_test, y_test, epochs=10, train=0):
         # Softmax regressor to classify images based on encoding
         classifier_model = Sequential()
-        classifier_model.add(Dense(units=256, input_dim=x_train.shape[1], kernel_initializer='glorot_uniform'))
+        classifier_model.add(Dense(units=4096, input_dim=x_train.shape[1], kernel_initializer='glorot_uniform'))
         classifier_model.add(BatchNormalization())
         classifier_model.add(Activation('tanh'))
         classifier_model.add(Dropout(0.3))
-        classifier_model.add(Dense(units=10, kernel_initializer='glorot_uniform'))
+        classifier_model.add(Dense(units=1024, kernel_initializer='glorot_uniform'))
         classifier_model.add(BatchNormalization())
         classifier_model.add(Activation('tanh'))
         classifier_model.add(Dropout(0.2))
@@ -274,13 +276,13 @@ if __name__ == '__main__':
     x_train, y_train, x_test, y_test, le_name_mapping = vgg_model.load_data('data\\vgg_f_onefile.mat')
     classifier_model = vgg_model.classifier(x_train, y_train, x_test, y_test)
     # test prediction on a test image
-    test = x_test[0]
-    test = np.array(np.reshape(test.flatten(), (1, 2622)))
-    index, name = vgg_model.predict_label_name_embedded(test, classifier_model, le_name_mapping)
+    index, name = vgg_model.predict_label_name_embedded(x_test, classifier_model, le_name_mapping)
+    index2 = vgg_model.predict_label_embedded(x_test, classifier_model)
     for i in range(len(index)):
-        print("(", index[i], name[i], ") , (", y_test[i], le_name_mapping[y_test[i]],")")
+        print(index2[i], "(", index[i], name[i], ") , (", y_test[i], le_name_mapping[y_test[i]],")")
 
     test_size = len(y_test)
     correct_number = sum(index==y_test)
     loss = 1 - correct_number/test_size
+    print("accuracy is: ", (1-loss)*100, "%")
     print("the validation 0/1 loss is: ",loss)
