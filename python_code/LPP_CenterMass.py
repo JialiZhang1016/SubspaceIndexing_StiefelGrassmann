@@ -689,13 +689,13 @@ if __name__ == "__main__":
     # the LPP embedding dimension = d_LPP on each given cluster
     d_LPP = 128
     # train_size = the training data size
-    train_size = 10000
+    train_size = 380000
     # ht = the partition tree height
-    ht = 3
+    ht = 8
     # choose if we want to do a further tuning for the kd tree
-    dokdtreetuning = 1
+    dokdtreetuning = 0
     # test_size = the test data size
-    test_size = 100
+    test_size = 1000
 
     # choose to augment the original training data x and y globally by GMM sampling and pre-trained learning model prediction, use them to build the kd-tree and subspace model
     # in this case, the augmented data points will be used automatically in knn nearest neighbor clssification
