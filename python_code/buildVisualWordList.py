@@ -76,7 +76,7 @@ def buildVisualWordList(x, ht):
             x_offs_k = np.array(x_offs_k)
             #print("x_offs_k=", x_offs_k)
             # compute the covariance of x in offs_k along the kd dimensions, find the dimension with the maximal variance
-            sk = np.var(x_offs_k, 0);
+            sk = np.var(x_offs_k, 0)
             #print("sk=", sk)
             max_s = max(sk)
             sk = list(sk)
