@@ -254,11 +254,25 @@ def LPP_ObtainData(data_original_train, data_original_test, d_PCA, d_SecondPCA_k
         A0 = pca.components_
         # bulid a d_SecondPCA_kdtree dimensional embedding of data_train in x0
         x0 = np.matmul(data_train_x, np.array([A0[_] for _ in range(d_SecondPCA_kdtree)]).T)
-        # from x0, partition into 2^ht leaf nodes, each leaf node can give samples for a local LPP
-        indx, leafs, mbrs = buildVisualWordList(x0, ht)
+        # in case if we pick particular dimensions of training data to form the kd tree partition
+        if dokdtreetuning:
+            offs = np.random.permutation(12)
+            train_size = len(x0)
+            for train_index in range(train_size):
+                x0[train_index] = np.array([x0[train_index][d] for d in offs])
     else:
-        # from data_train_x, partition into 2^ht leaf nodes, each leaf node can give samples for a local LPP
-        indx, leafs, mbrs = buildVisualWordList(data_train_x, ht)
+        # in case if we pick particular dimensions of training data to form the kd tree partition
+        if dokdtreetuning:
+            x0 = []
+            offs = np.random.permutation(12)
+            train_size = len(data_train_x)
+            for train_index in range(train_size):
+                x0.append(np.array([data_train_x[train_index][d] for d in offs]))
+        else:
+            x0 = data_train_x
+
+    # from x0, partition into 2^ht leaf nodes, each leaf node can give samples for a local LPP
+    indx, leafs, mbrs = buildVisualWordList(x0, ht)
     
     return data_train, leafs, data_test, inv_mat
 
@@ -675,11 +689,13 @@ if __name__ == "__main__":
     # the LPP embedding dimension = d_LPP on each given cluster
     d_LPP = 128
     # train_size = the training data size
-    train_size = 380000
+    train_size = 10000
     # ht = the partition tree height
-    ht = 8
+    ht = 3
+    # choose if we want to do a further tuning for the kd tree
+    dokdtreetuning = 1
     # test_size = the test data size
-    test_size = 1000
+    test_size = 100
 
     # choose to augment the original training data x and y globally by GMM sampling and pre-trained learning model prediction, use them to build the kd-tree and subspace model
     # in this case, the augmented data points will be used automatically in knn nearest neighbor clssification
