@@ -1,6 +1,8 @@
 <b>Subspace indexing on Stiefel and Grassmann manifolds</b>
 
-a project by Wenqing Hu, Tiefeng Jiang, Li Zhu, Birendra Kathariya and Vikram Abrol
+a paper by Wenqing Hu, Tiefeng Jiang, Birendra Kathariya, Vikram Abrol, Jiali Zhang and Zhu Li
+
+published at IEEE BigData 2023 conference
 
 <b>(a) folder "matlab_code"</b>
 
