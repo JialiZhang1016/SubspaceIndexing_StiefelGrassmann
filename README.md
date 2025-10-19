@@ -1,69 +1,78 @@
-<b>Subspace indexing on Stiefel and Grassmann manifolds</b>
+# Subspace Indexing on Stiefel and Grassmann Manifolds
 
-a paper by Wenqing Hu, Tiefeng Jiang, Birendra Kathariya, Vikram Abrol, Jiali Zhang and Zhu Li
+**Authors:** Wenqing Hu, Tiefeng Jiang, Birendra Kathariya, Vikram Abrol, Jiali Zhang and Zhu Li
 
-published at IEEE BigData 2023 conference
+**Published at:** IEEE BigData 2023 Conference
 
-<b>(a) folder "matlab_code"</b>
+---
 
-(a-1) Stiefel_Optimization.m 
+## Overview
 
-the object class for optimization calculus and differential geometry on Stiefel manifolds, such as tangent projection, exponential map, geodesics, gradient descent, retraction, lifting, logarithmic map, etc.
+This work addresses the challenge of nonlinear representation learning in high-dimensional data. While classic linear methods (PCA, LDA) fail to capture local variations and nonlinear methods (kernel algorithms, DNNs) are computationally expensive, we propose the **Subspace Indexing Model with Interpolation (SIM-I)** — a lightweight, locality-aware approach that achieves comparable performance to deep neural networks while maintaining computational efficiency and theoretical interpretability through piecewise linear, globally nonlinear embeddings.
 
-(a-2) Grassmann_Optimization.m
+## Abstract
 
-the object class for optimization calculus and differential geometry on Grassmann manifolds, such as tangent projection, exponential map, geodesics, gradient descent, retraction, lifting, logarithmic map, etc.
+Classic linear methods like Principal Component Analysis (PCA) and Linear Discriminant Analysis (LDA) struggle to capture the nonlinearity and local variations in complex, high-dimensional data. While powerful nonlinear methods like Kernel Algorithms, Manifold Learning, and Deep Neural Networks (DNNs) exist, they are often computationally very expensive.
 
-(a-3) buildVisualWordList.m
+**Research Question:** How can we design a lightweight, locality-aware model that achieves nonlinear representation learning comparable to deep neural networks, while maintaining computational efficiency and theoretical interpretability?
 
-partition a given sample data set according to a tree of given height into leaf nodes
+This paper proposes the **Subspace Indexing Model with Interpolation (SIM-I)**, which builds a piecewise linear, locality-aware, yet globally nonlinear embedding.
 
-(a-4) SIFT_PCA.m
+## Architecture
 
-do the SIFT (Scale Invariant Feature Transform) PCA analysis
+![LIE Architecture](LIE%20build%20from%20SIM-I%20interpreted%20as%20a%20shallow%20network.png)
 
-(a-5) SIFT_PCA_Recovery.m
+The SIM-I model can be interpreted as a shallow neural network with locality-aware linear projections in the first hidden layer, followed by selective activation and weighted aggregation in the second hidden layer for KNN classification.
 
-do the SIFT PCA recovery using the Stiefel_Optimization method, compare with benchmark nearest neighbor method
+---
 
-(a-6) LPP_CenterMass.m
+## Code Structure
 
-classfication analysis based on Laplacian eigenface and graph Laplacian method, as well as center of mass on Grassmann manifold. Applied to several different datasets: nwpu-aerial-images, MNIST, cifar10
+### (a) MATLAB Code
 
-<b>(b) folder "python_code"</b>
+- **`Stiefel_Optimization.m`**
+  Object class for optimization calculus and differential geometry on Stiefel manifolds, including tangent projection, exponential map, geodesics, gradient descent, retraction, lifting, logarithmic map, etc.
 
-(b-1) Stiefel_Optimization.py 
+- **`Grassmann_Optimization.m`**
+  Object class for optimization calculus and differential geometry on Grassmann manifolds, including tangent projection, exponential map, geodesics, gradient descent, retraction, lifting, logarithmic map, etc.
 
-file with same name and function as matlab_code
+- **`buildVisualWordList.m`**
+  Partitions a given sample data set according to a tree of given height into leaf nodes.
 
-(b-2) Grassmann_Optimization.py
+- **`SIFT_PCA.m`**
+  Performs SIFT (Scale Invariant Feature Transform) PCA analysis.
 
-file with same name and function as matlab_code
+- **`SIFT_PCA_Recovery.m`**
+  SIFT PCA recovery using the Stiefel_Optimization method, compared with benchmark nearest neighbor method.
 
-(b-3) buildVisualWordList.py
+- **`LPP_CenterMass.m`**
+  Classification analysis based on Laplacian eigenface and graph Laplacian method, as well as center of mass on Grassmann manifold. Applied to datasets: nwpu-aerial-images, MNIST, cifar10.
 
-file with same name and function as matlab_code
+### (b) Python Code
 
-(b-4) LPP_CenterMass.py
+- **`Stiefel_Optimization.py`**
+  Python implementation with same functionality as the MATLAB version.
 
-classfication analysis based on Laplacian eigenface and graph Laplacian method, as well as center of mass on Grassmann manifold. Applied to several different datasets: MNIST, cifar10; incorporates GMM sampling of pseudo-data inputs and labeling by pre-trained model
+- **`Grassmann_Optimization.py`**
+  Python implementation with same functionality as the MATLAB version.
 
-(b-5) LPP_Auxiliary.py
+- **`buildVisualWordList.py`**
+  Python implementation with same functionality as the MATLAB version.
 
-Functions to perform the Laplacian eigenface and graph Laplacian method. Include: k-nearest neighbor, graph laplacian, supervised affinity, LPP generalized eigenvalue problem
+- **`LPP_CenterMass.py`**
+  Classification analysis based on Laplacian eigenface and graph Laplacian method, as well as center of mass on Grassmann manifold. Applied to datasets: MNIST, CIFAR-10. Incorporates GMM sampling of pseudo-data inputs and labeling by pre-trained model.
 
-(b-6) cifar10vgg.py
+- **`LPP_Auxiliary.py`**
+  Auxiliary functions for Laplacian eigenface and graph Laplacian method, including: k-nearest neighbor, graph Laplacian, supervised affinity, LPP generalized eigenvalue problem.
 
-build a pre-trained vgg model for cifar10, can also train a new cifar10. Pre-trained model paramter data available at https://github.com/geifmany/cifar-vgg
+- **`cifar10vgg.py`**
+  Builds a pre-trained VGG model for CIFAR-10, can also train a new model. Pre-trained model parameters available at [cifar-vgg](https://github.com/geifmany/cifar-vgg).
 
-(b-7) umap_data_aug.py
+- **`umap_data_aug.py`**
+  Generates new pseudo data points based on current dataset using UMAP and 2-simplices.
 
-generate new pseudo data points based on current data set using the UMAP and 2-simplices
+- **`MNISTLeNetv2.py`**
+  Builds a pre-trained LeNet-v2 model for MNIST.
 
-(b-8) MNISTLeNetv2.py
-
-build a pre-trained LeNetv2 model for MNIST.  
-
-(b-9) vox1VggFace.py
-
-buile a pre-trained vgg model for the face data set
+- **`vox1VggFace.py`**
+  Builds a pre-trained VGG model for face datasets.
